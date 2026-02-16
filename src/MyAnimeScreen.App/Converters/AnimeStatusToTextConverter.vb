@@ -1,6 +1,6 @@
 Imports System.Globalization
 Imports System.Windows.Data
-Imports AnimeScreen.App.Models
+Imports MyAnimeScreen.App.Models
 
 Namespace Converters
     Public Class AnimeStatusToTextConverter

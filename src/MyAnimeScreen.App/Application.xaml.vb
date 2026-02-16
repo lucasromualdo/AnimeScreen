@@ -1,6 +1,6 @@
 Imports System.IO
 Imports System.Windows
-Imports AnimeScreen.App.Services.Data
+Imports MyAnimeScreen.App.Services.Data
 
 Class Application
     Private Async Sub Application_Startup(sender As Object, e As StartupEventArgs) Handles Me.Startup
@@ -24,7 +24,7 @@ Class Application
         Catch ex As Exception
             MessageBox.Show(
                 $"Falha ao inicializar o banco de dados: {ex.Message}",
-                "AnimeScreen",
+                "MyAnimeScreen",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error
             )

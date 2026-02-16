@@ -1,5 +1,5 @@
 Imports Dapper
-Imports AnimeScreen.App.Models
+Imports MyAnimeScreen.App.Models
 
 Namespace Services.Data
     Public Class UserAnimeRepository

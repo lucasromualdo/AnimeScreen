@@ -1,4 +1,4 @@
-Imports AnimeScreen.App.Models
+Imports MyAnimeScreen.App.Models
 
 Namespace Services.Api
     Public Class JikanApiClient

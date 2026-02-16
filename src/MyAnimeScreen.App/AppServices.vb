@@ -1,4 +1,4 @@
-Imports AnimeScreen.App.Services.Data
+Imports MyAnimeScreen.App.Services.Data
 
 Friend Module AppServices
     Friend Property ConnectionFactory As DbConnectionFactory

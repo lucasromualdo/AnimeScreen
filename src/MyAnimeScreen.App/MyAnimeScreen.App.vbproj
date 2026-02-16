@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <RootNamespace>AnimeScreen.App</RootNamespace>
+    <RootNamespace>MyAnimeScreen.App</RootNamespace>
     <OptionStrict>On</OptionStrict>
     <OptionInfer>On</OptionInfer>
     <UseWPF>true</UseWPF>

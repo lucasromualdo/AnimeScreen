@@ -1,4 +1,4 @@
-# AnimeScreen Roadmap
+# MyAnimeScreen Roadmap
 
 ## Fase 1
 - Estrutura do projeto em camadas
