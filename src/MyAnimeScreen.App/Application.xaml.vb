@@ -1,5 +1,6 @@
 Imports System.IO
 Imports System.Windows
+Imports MyAnimeScreen.App.Services.Api
 Imports MyAnimeScreen.App.Services.Data
 
 Class Application
@@ -14,6 +15,7 @@ Class Application
             End If
 
             AppServices.ConnectionFactory = New DbConnectionFactory(databasePath)
+            AppServices.AnimeApiClient = New JikanApiClient()
             AppServices.AnimeRepository = New AnimeRepository(AppServices.ConnectionFactory)
             AppServices.UserAnimeRepository = New UserAnimeRepository(AppServices.ConnectionFactory)
 
