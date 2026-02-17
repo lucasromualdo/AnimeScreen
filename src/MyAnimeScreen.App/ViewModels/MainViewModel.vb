@@ -15,6 +15,7 @@ Namespace ViewModels
         Private ReadOnly _searchCommand As RelayCommand
         Private ReadOnly _saveToMyListCommand As RelayCommand
         Private ReadOnly _removeFromMyListCommand As RelayCommand
+        Private ReadOnly _openLibraryItemCommand As RelayCommand
         Private ReadOnly _refreshLibraryCommand As RelayCommand
         Private _query As String = String.Empty
         Private _selectedAnime As Anime
@@ -38,6 +39,7 @@ Namespace ViewModels
             _searchCommand = New RelayCommand(AddressOf ExecuteSearch, AddressOf CanExecuteSearch)
             _saveToMyListCommand = New RelayCommand(AddressOf ExecuteSaveToMyList, AddressOf CanExecuteSaveToMyList)
             _removeFromMyListCommand = New RelayCommand(AddressOf ExecuteRemoveFromMyList, AddressOf CanExecuteRemoveFromMyList)
+            _openLibraryItemCommand = New RelayCommand(AddressOf ExecuteOpenLibraryItem, AddressOf CanExecuteOpenLibraryItem)
             _refreshLibraryCommand = New RelayCommand(AddressOf ExecuteRefreshLibrary, AddressOf CanExecuteRefreshLibrary)
             ScheduleLibraryReload()
         End Sub
@@ -100,6 +102,7 @@ Namespace ViewModels
                 _searchCommand.RaiseCanExecuteChanged()
                 _saveToMyListCommand.RaiseCanExecuteChanged()
                 _removeFromMyListCommand.RaiseCanExecuteChanged()
+                _openLibraryItemCommand.RaiseCanExecuteChanged()
             End Set
         End Property
 
@@ -231,6 +234,12 @@ Namespace ViewModels
             End Get
         End Property
 
+        Public ReadOnly Property OpenLibraryItemCommand As ICommand
+            Get
+                Return _openLibraryItemCommand
+            End Get
+        End Property
+
         Public ReadOnly Property LibraryItems As ObservableCollection(Of LibraryAnimeItem)
 
         Public Property SelectedLibraryItem As LibraryAnimeItem
@@ -286,6 +295,14 @@ Namespace ViewModels
             Return (Not IsLoading) AndAlso SelectedAnime IsNot Nothing AndAlso SelectedAnime.Id > 0
         End Function
 
+        Private Function CanExecuteOpenLibraryItem(parameter As Object) As Boolean
+            If IsLoading Then
+                Return False
+            End If
+
+            Return TryCast(parameter, LibraryAnimeItem) IsNot Nothing
+        End Function
+
         Private Function CanExecuteRefreshLibrary(parameter As Object) As Boolean
             Return Not IsLibraryLoading
         End Function
@@ -300,6 +317,20 @@ Namespace ViewModels
 
         Private Async Sub ExecuteRemoveFromMyList(parameter As Object)
             Await RemoveFromMyListAsync().ConfigureAwait(True)
+        End Sub
+
+        Private Sub ExecuteOpenLibraryItem(parameter As Object)
+            Dim item = TryCast(parameter, LibraryAnimeItem)
+            If item Is Nothing Then
+                Return
+            End If
+
+            If Object.ReferenceEquals(SelectedLibraryItem, item) Then
+                LoadAnimeFromLibrarySelection(item)
+                Return
+            End If
+
+            SelectedLibraryItem = item
         End Sub
 
         Private Sub ExecuteRefreshLibrary(parameter As Object)
