@@ -280,70 +280,105 @@
                                    Text="Carregando biblioteca..." />
                     </Grid>
 
-                    <ListBox Grid.Row="2"
-                             ItemsSource="{Binding LibraryItems}"
-                             SelectedItem="{Binding SelectedLibraryItem, Mode=TwoWay}">
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
-                                <Setter Property="Margin" Value="0,0,0,6" />
-                                <Setter Property="Padding" Value="0" />
-                                <Setter Property="Background" Value="Transparent" />
-                                <Setter Property="BorderBrush" Value="Transparent" />
-                                <Setter Property="BorderThickness" Value="0" />
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                <Style.Triggers>
-                                    <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Background" Value="#E0F2FE" />
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ListBox.ItemContainerStyle>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Border Padding="8"
-                                        BorderBrush="#BFDBFE"
-                                        BorderThickness="1"
-                                        CornerRadius="6">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="3*" />
-                                            <ColumnDefinition Width="2*" />
-                                            <ColumnDefinition Width="2*" />
-                                            <ColumnDefinition Width="2*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
+                    <Grid Grid.Row="2">
+                        <ListBox ItemsSource="{Binding LibraryItems}"
+                                 SelectedItem="{Binding SelectedLibraryItem, Mode=TwoWay}">
+                            <ListBox.Style>
+                                <Style TargetType="ListBox">
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding LibraryItems.Count}" Value="0" />
+                                                <Condition Binding="{Binding IsLibraryLoading}" Value="False" />
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ListBox.Style>
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Margin" Value="0,0,0,6" />
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="Background" Value="Transparent" />
+                                    <Setter Property="BorderBrush" Value="Transparent" />
+                                    <Setter Property="BorderThickness" Value="0" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Style.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="#E0F2FE" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="8"
+                                            BorderBrush="#BFDBFE"
+                                            BorderThickness="1"
+                                            CornerRadius="6">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="3*" />
+                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
 
-                                        <StackPanel Grid.Column="0"
-                                                    Orientation="Horizontal">
-                                            <TextBlock FontWeight="SemiBold"
-                                                       Text="{Binding Title}" />
-                                            <TextBlock Margin="6,0,0,0"
-                                                       Foreground="#B45309"
-                                                       FontWeight="Bold"
-                                                       Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                       Text="★" />
-                                        </StackPanel>
+                                            <StackPanel Grid.Column="0"
+                                                        Orientation="Horizontal">
+                                                <TextBlock FontWeight="SemiBold"
+                                                           Text="{Binding Title}" />
+                                                <TextBlock Margin="6,0,0,0"
+                                                           Foreground="#B45309"
+                                                           FontWeight="Bold"
+                                                           Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                           Text="★" />
+                                            </StackPanel>
 
-                                        <TextBlock Grid.Column="1"
-                                                   Text="{Binding Status, Converter={StaticResource AnimeStatusToTextConverter}}" />
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding Status, Converter={StaticResource AnimeStatusToTextConverter}}" />
 
-                                        <TextBlock Grid.Column="2"
-                                                   Text="{Binding CurrentEpisode, StringFormat=Ep atual: {0}}" />
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding CurrentEpisode, StringFormat=Ep atual: {0}}" />
 
-                                        <TextBlock Grid.Column="3"
-                                                   Text="{Binding PersonalScore, StringFormat=Nota: {0:F1}}" />
+                                            <TextBlock Grid.Column="3"
+                                                       Text="{Binding PersonalScore, StringFormat=Nota: {0:F1}}" />
 
-                                        <Button Grid.Column="4"
-                                                Margin="10,0,0,0"
-                                                Padding="10,4"
-                                                Command="{Binding DataContext.OpenLibraryItemCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                                CommandParameter="{Binding}"
-                                                Content="Abrir" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                                            <Button Grid.Column="4"
+                                                    Margin="10,0,0,0"
+                                                    Padding="10,4"
+                                                    Command="{Binding DataContext.OpenLibraryItemCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                    CommandParameter="{Binding}"
+                                                    Content="Abrir" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <TextBlock HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontWeight="SemiBold"
+                                   Foreground="#6B7280"
+                                   Text="Nenhum anime salvo para este status."
+                                   Visibility="Collapsed">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding LibraryItems.Count}" Value="0" />
+                                                <Condition Binding="{Binding IsLibraryLoading}" Value="False" />
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
                 </Grid>
             </Border>
         </Grid>
