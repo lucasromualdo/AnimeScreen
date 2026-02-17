@@ -37,15 +37,19 @@ Namespace ViewModels
         Private _libraryLoadVersion As Integer
         Private _suppressLibrarySelectionLoad As Boolean
 
-        Public Sub New()
-            Me.New(
-                Global.MyAnimeScreen.App.AppServices.AnimeApiClient,
-                Global.MyAnimeScreen.App.AppServices.AnimeRepository,
-                Global.MyAnimeScreen.App.AppServices.UserAnimeRepository
-            )
-        End Sub
-
         Public Sub New(animeApiClient As IAnimeApiClient, animeRepository As AnimeRepository, userAnimeRepository As UserAnimeRepository)
+            If animeApiClient Is Nothing Then
+                Throw New ArgumentNullException(NameOf(animeApiClient))
+            End If
+
+            If animeRepository Is Nothing Then
+                Throw New ArgumentNullException(NameOf(animeRepository))
+            End If
+
+            If userAnimeRepository Is Nothing Then
+                Throw New ArgumentNullException(NameOf(userAnimeRepository))
+            End If
+
             _animeApiClient = animeApiClient
             _animeRepository = animeRepository
             _userAnimeRepository = userAnimeRepository
