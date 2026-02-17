@@ -23,6 +23,7 @@ Namespace ViewModels
         Private _personalScore As Double?
         Private _isFavorite As Boolean
         Private _userNotes As String = String.Empty
+        Private _selectionLoadVersion As Integer
 
         Public Sub New()
             Results = New ObservableCollection(Of Anime)()
@@ -61,8 +62,14 @@ Namespace ViewModels
 
                 _selectedAnime = value
                 OnPropertyChanged()
+                _selectionLoadVersion += 1
+                Dim currentLoadVersion = _selectionLoadVersion
                 ResetUserEntryDraft()
                 _saveToMyListCommand.RaiseCanExecuteChanged()
+
+                If value IsNot Nothing Then
+                    LoadUserEntryForSelectedAnime(value, currentLoadVersion)
+                End If
             End Set
         End Property
 
@@ -281,6 +288,43 @@ Namespace ViewModels
             End Try
         End Function
 
+        Private Async Sub LoadUserEntryForSelectedAnime(selected As Anime, loadVersion As Integer)
+            Await LoadUserEntryForSelectedAnimeAsync(selected, loadVersion).ConfigureAwait(True)
+        End Sub
+
+        Private Async Function LoadUserEntryForSelectedAnimeAsync(selected As Anime, loadVersion As Integer) As Task
+            Try
+                If selected.Id <= 0 Then
+                    Return
+                End If
+
+                Dim userAnimeRepository = Global.MyAnimeScreen.App.AppServices.UserAnimeRepository
+                If userAnimeRepository Is Nothing Then
+                    Return
+                End If
+
+                Dim savedEntry = Await userAnimeRepository.GetByAnimeIdAsync(selected.Id).ConfigureAwait(True)
+
+                If loadVersion <> _selectionLoadVersion Then
+                    Return
+                End If
+
+                If Not Object.ReferenceEquals(SelectedAnime, selected) Then
+                    Return
+                End If
+
+                If savedEntry Is Nothing Then
+                    Return
+                End If
+
+                ApplyUserEntry(savedEntry)
+            Catch ex As Exception
+                If loadVersion = _selectionLoadVersion Then
+                    ErrorMessage = $"Falha ao carregar dados da Minha Lista: {ex.Message}"
+                End If
+            End Try
+        End Function
+
         Private Shared Async Function PersistSearchResultsAsync(items As IEnumerable(Of Anime), animeRepository As AnimeRepository) As Task(Of Integer)
             Dim failures = 0
 
@@ -294,6 +338,14 @@ Namespace ViewModels
 
             Return failures
         End Function
+
+        Private Sub ApplyUserEntry(entry As UserAnime)
+            UserStatus = entry.Status
+            CurrentEpisode = entry.CurrentEpisode
+            PersonalScore = entry.PersonalScore
+            IsFavorite = entry.IsFavorite
+            UserNotes = If(entry.Notes, String.Empty)
+        End Sub
 
         Private Sub ResetUserEntryDraft()
             UserStatus = AnimeStatus.QueroVer
