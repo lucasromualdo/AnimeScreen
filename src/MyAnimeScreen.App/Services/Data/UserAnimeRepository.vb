@@ -119,6 +119,38 @@ ORDER BY
             End Using
         End Function
 
+        Public Async Function ListLibraryByStatusAsync(status As AnimeStatus) As Task(Of IReadOnlyList(Of LibraryAnimeSnapshot))
+            Const sql As String =
+"SELECT
+    ua.anime_id AS AnimeId,
+    a.title AS Title,
+    ua.status AS Status,
+    ua.current_episode AS CurrentEpisode,
+    ua.personal_score AS PersonalScore,
+    ua.is_favorite AS IsFavorite
+FROM user_anime ua
+INNER JOIN animes a
+    ON a.id = ua.anime_id
+WHERE ua.status = @Status
+ORDER BY
+    ua.is_favorite DESC,
+    ua.updated_at DESC;"
+
+            Using connection = Await _connectionFactory.CreateOpenConnectionAsync().ConfigureAwait(False)
+                Dim rows = Await connection.QueryAsync(Of LibraryAnimeSnapshotRow)(
+                    sql,
+                    New With {.Status = ToDatabaseStatus(status)}
+                ).ConfigureAwait(False)
+
+                Dim result = New List(Of LibraryAnimeSnapshot)
+                For Each row In rows
+                    result.Add(MapLibraryRow(row))
+                Next
+
+                Return result
+            End Using
+        End Function
+
         Public Async Function DeleteByAnimeIdAsync(animeId As Long) As Task(Of Integer)
             Const sql As String =
 "DELETE FROM user_anime
@@ -160,6 +192,26 @@ WHERE anime_id = @AnimeId;"
             }
         End Function
 
+        Private Shared Function MapLibraryRow(row As LibraryAnimeSnapshotRow) As LibraryAnimeSnapshot
+            Return New LibraryAnimeSnapshot With {
+                .AnimeId = row.AnimeId,
+                .Title = row.Title,
+                .Status = ParseDatabaseStatus(row.Status),
+                .CurrentEpisode = row.CurrentEpisode,
+                .PersonalScore = row.PersonalScore,
+                .IsFavorite = row.IsFavorite <> 0
+            }
+        End Function
+
+        Public Class LibraryAnimeSnapshot
+            Public Property AnimeId As Long
+            Public Property Title As String = String.Empty
+            Public Property Status As AnimeStatus
+            Public Property CurrentEpisode As Integer
+            Public Property PersonalScore As Double?
+            Public Property IsFavorite As Boolean
+        End Class
+
         Private Class UserAnimeRow
             Public Property Id As Long
             Public Property AnimeId As Long
@@ -171,6 +223,15 @@ WHERE anime_id = @AnimeId;"
             Public Property StartedAt As DateTime?
             Public Property FinishedAt As DateTime?
             Public Property UpdatedAt As DateTime?
+        End Class
+
+        Private Class LibraryAnimeSnapshotRow
+            Public Property AnimeId As Long
+            Public Property Title As String = String.Empty
+            Public Property Status As String = String.Empty
+            Public Property CurrentEpisode As Integer
+            Public Property PersonalScore As Double?
+            Public Property IsFavorite As Integer
         End Class
     End Class
 End Namespace

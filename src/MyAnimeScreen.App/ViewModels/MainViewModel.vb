@@ -490,9 +490,8 @@ Namespace ViewModels
             IsLibraryLoading = True
 
             Try
-                Dim animeRepository = Global.MyAnimeScreen.App.AppServices.AnimeRepository
                 Dim userAnimeRepository = Global.MyAnimeScreen.App.AppServices.UserAnimeRepository
-                If animeRepository Is Nothing OrElse userAnimeRepository Is Nothing Then
+                If userAnimeRepository Is Nothing Then
                     If requestedVersion = _libraryLoadVersion Then
                         LibraryItems.Clear()
                     End If
@@ -500,25 +499,16 @@ Namespace ViewModels
                     Return
                 End If
 
-                Dim userItems = Await userAnimeRepository.ListByStatusAsync(LibraryFilterStatus).ConfigureAwait(True)
+                Dim userItems = Await userAnimeRepository.ListLibraryByStatusAsync(LibraryFilterStatus).ConfigureAwait(True)
                 If requestedVersion <> _libraryLoadVersion Then
                     Return
                 End If
 
                 Dim libraryRows = New List(Of LibraryAnimeItem)
                 For Each userItem In userItems
-                    Dim anime = Await animeRepository.GetByIdAsync(userItem.AnimeId).ConfigureAwait(True)
-                    If requestedVersion <> _libraryLoadVersion Then
-                        Return
-                    End If
-
-                    If anime Is Nothing Then
-                        Continue For
-                    End If
-
                     libraryRows.Add(New LibraryAnimeItem With {
                         .AnimeId = userItem.AnimeId,
-                        .Title = anime.Title,
+                        .Title = userItem.Title,
                         .Status = userItem.Status,
                         .CurrentEpisode = userItem.CurrentEpisode,
                         .PersonalScore = userItem.PersonalScore,
