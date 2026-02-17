@@ -9,6 +9,7 @@ Namespace Services.Api
         Implements IAnimeApiClient
 
         Private Const BaseUrl As String = "https://api.jikan.moe/v4/"
+        Private Const MaxRequestAttempts As Integer = 4
         Private Shared ReadOnly _jsonOptions As New JsonSerializerOptions With {
             .PropertyNameCaseInsensitive = True
         }
@@ -64,24 +65,132 @@ Namespace Services.Api
         End Function
 
         Private Shared Async Function GetJsonAsync(Of T)(relativePath As String) As Task(Of T)
-            Using response = Await _httpClient.GetAsync(relativePath).ConfigureAwait(False)
-                If Not response.IsSuccessStatusCode Then
+            For attempt = 1 To MaxRequestAttempts
+                Dim retryDelay As TimeSpan? = Nothing
+                Dim networkError As HttpRequestException = Nothing
+
+                Try
+                    Using response = Await _httpClient.GetAsync(relativePath).ConfigureAwait(False)
+                        If response.IsSuccessStatusCode Then
+                            Using stream = Await response.Content.ReadAsStreamAsync().ConfigureAwait(False)
+                                Dim payload = Await JsonSerializer.DeserializeAsync(Of T)(
+                                    stream,
+                                    _jsonOptions
+                                ).ConfigureAwait(False)
+
+                                Return payload
+                            End Using
+                        End If
+
+                        Dim statusCode = response.StatusCode
+                        Dim reasonPhrase = NormalizeReasonPhrase(response.ReasonPhrase)
+
+                        If IsRetriableStatusCode(statusCode) Then
+                            If attempt < MaxRequestAttempts Then
+                                retryDelay = GetRetryDelay(response, attempt)
+                            Else
+                                Throw New HttpRequestException(
+                                    BuildTransientStatusErrorMessage(statusCode, reasonPhrase, attempt),
+                                    Nothing,
+                                    statusCode
+                                )
+                            End If
+                        Else
+                            Throw New HttpRequestException(
+                                BuildDefinitiveStatusErrorMessage(statusCode, reasonPhrase),
+                                Nothing,
+                                statusCode
+                            )
+                        End If
+                    End Using
+                Catch ex As HttpRequestException When Not ex.StatusCode.HasValue
+                    If attempt < MaxRequestAttempts Then
+                        retryDelay = GetBackoffDelay(attempt)
+                    Else
+                        networkError = ex
+                    End If
+                Catch ex As TaskCanceledException When attempt < MaxRequestAttempts
+                    retryDelay = GetBackoffDelay(attempt)
+                Catch ex As TaskCanceledException
                     Throw New HttpRequestException(
-                        $"Jikan retornou {(CInt(response.StatusCode)).ToString()} ({response.ReasonPhrase}).",
-                        Nothing,
-                        response.StatusCode
+                        $"Falha temporaria ao consultar Jikan: tempo limite apos {attempt.ToString()} tentativa(s).",
+                        ex
                     )
+                End Try
+
+                If retryDelay.HasValue Then
+                    Await Task.Delay(retryDelay.Value).ConfigureAwait(False)
+                    Continue For
                 End If
 
-                Using stream = Await response.Content.ReadAsStreamAsync().ConfigureAwait(False)
-                    Dim payload = Await JsonSerializer.DeserializeAsync(Of T)(
-                        stream,
-                        _jsonOptions
-                    ).ConfigureAwait(False)
+                If networkError IsNot Nothing Then
+                    Throw New HttpRequestException(
+                        $"Falha de rede ao consultar Jikan apos {attempt.ToString()} tentativa(s): {networkError.Message}",
+                        networkError
+                    )
+                End If
+            Next
 
-                    Return payload
-                End Using
-            End Using
+            Throw New HttpRequestException("Falha temporaria ao consultar Jikan apos multiplas tentativas.")
+        End Function
+
+        Private Shared Function IsRetriableStatusCode(statusCode As HttpStatusCode) As Boolean
+            Return statusCode = HttpStatusCode.TooManyRequests OrElse CInt(statusCode) >= 500
+        End Function
+
+        Private Shared Function GetRetryDelay(response As HttpResponseMessage, attempt As Integer) As TimeSpan
+            Dim retryAfter = response.Headers.RetryAfter
+            If retryAfter IsNot Nothing Then
+                If retryAfter.Delta.HasValue Then
+                    Return ClampRetryDelay(retryAfter.Delta.Value)
+                End If
+
+                If retryAfter.Date.HasValue Then
+                    Dim waitTime = retryAfter.Date.Value - DateTimeOffset.UtcNow
+                    If waitTime > TimeSpan.Zero Then
+                        Return ClampRetryDelay(waitTime)
+                    End If
+                End If
+            End If
+
+            Return GetBackoffDelay(attempt)
+        End Function
+
+        Private Shared Function GetBackoffDelay(attempt As Integer) As TimeSpan
+            Dim exponent = Math.Max(0, attempt - 1)
+            Dim milliseconds = Math.Pow(2, exponent) * 500
+            Return ClampRetryDelay(TimeSpan.FromMilliseconds(milliseconds))
+        End Function
+
+        Private Shared Function ClampRetryDelay(delay As TimeSpan) As TimeSpan
+            Dim minDelay = TimeSpan.FromMilliseconds(200)
+            Dim maxDelay = TimeSpan.FromSeconds(8)
+
+            If delay < minDelay Then
+                Return minDelay
+            End If
+
+            If delay > maxDelay Then
+                Return maxDelay
+            End If
+
+            Return delay
+        End Function
+
+        Private Shared Function BuildTransientStatusErrorMessage(statusCode As HttpStatusCode, reasonPhrase As String, attempt As Integer) As String
+            Return $"Falha temporaria na API Jikan apos {attempt.ToString()} tentativa(s): {(CInt(statusCode)).ToString()} ({reasonPhrase})."
+        End Function
+
+        Private Shared Function BuildDefinitiveStatusErrorMessage(statusCode As HttpStatusCode, reasonPhrase As String) As String
+            Return $"Falha definitiva na API Jikan: {(CInt(statusCode)).ToString()} ({reasonPhrase})."
+        End Function
+
+        Private Shared Function NormalizeReasonPhrase(reasonPhrase As String) As String
+            If String.IsNullOrWhiteSpace(reasonPhrase) Then
+                Return "sem descricao"
+            End If
+
+            Return reasonPhrase.Trim()
         End Function
 
         Private Shared Function MapToAnime(source As JikanAnimeData) As Anime
