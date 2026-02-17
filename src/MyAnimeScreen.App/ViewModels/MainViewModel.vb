@@ -14,6 +14,7 @@ Namespace ViewModels
 
         Private ReadOnly _searchCommand As RelayCommand
         Private ReadOnly _saveToMyListCommand As RelayCommand
+        Private ReadOnly _removeFromMyListCommand As RelayCommand
         Private ReadOnly _refreshLibraryCommand As RelayCommand
         Private _query As String = String.Empty
         Private _selectedAnime As Anime
@@ -36,6 +37,7 @@ Namespace ViewModels
             LibraryItems = New ObservableCollection(Of LibraryAnimeItem)()
             _searchCommand = New RelayCommand(AddressOf ExecuteSearch, AddressOf CanExecuteSearch)
             _saveToMyListCommand = New RelayCommand(AddressOf ExecuteSaveToMyList, AddressOf CanExecuteSaveToMyList)
+            _removeFromMyListCommand = New RelayCommand(AddressOf ExecuteRemoveFromMyList, AddressOf CanExecuteRemoveFromMyList)
             _refreshLibraryCommand = New RelayCommand(AddressOf ExecuteRefreshLibrary, AddressOf CanExecuteRefreshLibrary)
             ScheduleLibraryReload()
         End Sub
@@ -75,6 +77,7 @@ Namespace ViewModels
                 Dim currentLoadVersion = _selectionLoadVersion
                 ResetUserEntryDraft()
                 _saveToMyListCommand.RaiseCanExecuteChanged()
+                _removeFromMyListCommand.RaiseCanExecuteChanged()
                 SyncLibrarySelectionWithSelectedAnime()
 
                 If value IsNot Nothing Then
@@ -96,6 +99,7 @@ Namespace ViewModels
                 OnPropertyChanged()
                 _searchCommand.RaiseCanExecuteChanged()
                 _saveToMyListCommand.RaiseCanExecuteChanged()
+                _removeFromMyListCommand.RaiseCanExecuteChanged()
             End Set
         End Property
 
@@ -221,6 +225,12 @@ Namespace ViewModels
             End Get
         End Property
 
+        Public ReadOnly Property RemoveFromMyListCommand As ICommand
+            Get
+                Return _removeFromMyListCommand
+            End Get
+        End Property
+
         Public ReadOnly Property LibraryItems As ObservableCollection(Of LibraryAnimeItem)
 
         Public Property SelectedLibraryItem As LibraryAnimeItem
@@ -272,6 +282,10 @@ Namespace ViewModels
             Return (Not IsLoading) AndAlso SelectedAnime IsNot Nothing
         End Function
 
+        Private Function CanExecuteRemoveFromMyList(parameter As Object) As Boolean
+            Return (Not IsLoading) AndAlso SelectedAnime IsNot Nothing AndAlso SelectedAnime.Id > 0
+        End Function
+
         Private Function CanExecuteRefreshLibrary(parameter As Object) As Boolean
             Return Not IsLibraryLoading
         End Function
@@ -282,6 +296,10 @@ Namespace ViewModels
 
         Private Async Sub ExecuteSaveToMyList(parameter As Object)
             Await SaveToMyListAsync().ConfigureAwait(True)
+        End Sub
+
+        Private Async Sub ExecuteRemoveFromMyList(parameter As Object)
+            Await RemoveFromMyListAsync().ConfigureAwait(True)
         End Sub
 
         Private Sub ExecuteRefreshLibrary(parameter As Object)
@@ -322,6 +340,31 @@ Namespace ViewModels
                 Results.Clear()
                 SelectedAnime = Nothing
                 ErrorMessage = $"Falha na busca: {ex.Message}"
+            Finally
+                IsLoading = False
+            End Try
+        End Function
+
+        Private Async Function RemoveFromMyListAsync() As Task
+            Dim selected = SelectedAnime
+            If selected Is Nothing OrElse selected.Id <= 0 Then
+                Return
+            End If
+
+            IsLoading = True
+            ErrorMessage = String.Empty
+
+            Try
+                Dim userAnimeRepository = Global.MyAnimeScreen.App.AppServices.UserAnimeRepository
+                If userAnimeRepository Is Nothing Then
+                    Throw New InvalidOperationException("Repositório local não inicializado.")
+                End If
+
+                Await userAnimeRepository.DeleteByAnimeIdAsync(selected.Id).ConfigureAwait(True)
+                ResetUserEntryDraft()
+                ScheduleLibraryReload()
+            Catch ex As Exception
+                ErrorMessage = $"Falha ao remover da Minha Lista: {ex.Message}"
             Finally
                 IsLoading = False
             End Try

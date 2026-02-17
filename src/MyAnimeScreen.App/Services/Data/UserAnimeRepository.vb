@@ -117,6 +117,19 @@ ORDER BY updated_at DESC;"
             End Using
         End Function
 
+        Public Async Function DeleteByAnimeIdAsync(animeId As Long) As Task(Of Integer)
+            Const sql As String =
+"DELETE FROM user_anime
+WHERE anime_id = @AnimeId;"
+
+            Using connection = Await _connectionFactory.CreateOpenConnectionAsync().ConfigureAwait(False)
+                Return Await connection.ExecuteAsync(
+                    sql,
+                    New With {.AnimeId = animeId}
+                ).ConfigureAwait(False)
+            End Using
+        End Function
+
         Private Shared Function ToDatabaseStatus(status As AnimeStatus) As String
             Return status.ToString()
         End Function
