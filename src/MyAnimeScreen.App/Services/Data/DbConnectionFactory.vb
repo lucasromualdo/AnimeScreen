@@ -5,7 +5,7 @@ Namespace Services.Data
         Private ReadOnly _connectionString As String
 
         Public Sub New(databasePath As String)
-            _connectionString = $"Data Source={databasePath};Mode=ReadWriteCreate;Cache=Shared"
+            _connectionString = $"Data Source={databasePath};Mode=ReadWriteCreate;Cache=Shared;Foreign Keys=True"
         End Sub
 
         Public Async Function CreateOpenConnectionAsync() As Task(Of SqliteConnection)
