@@ -6,6 +6,7 @@ Imports System.Threading.Tasks
 Imports System.Windows.Input
 Imports MyAnimeScreen.App.Commands
 Imports MyAnimeScreen.App.Models
+Imports MyAnimeScreen.App.Services.Api
 Imports MyAnimeScreen.App.Services.Data
 
 Namespace ViewModels
@@ -17,6 +18,9 @@ Namespace ViewModels
         Private ReadOnly _removeFromMyListCommand As RelayCommand
         Private ReadOnly _openLibraryItemCommand As RelayCommand
         Private ReadOnly _refreshLibraryCommand As RelayCommand
+        Private ReadOnly _animeApiClient As IAnimeApiClient
+        Private ReadOnly _animeRepository As AnimeRepository
+        Private ReadOnly _userAnimeRepository As UserAnimeRepository
         Private _query As String = String.Empty
         Private _selectedAnime As Anime
         Private _selectedLibraryItem As LibraryAnimeItem
@@ -34,6 +38,17 @@ Namespace ViewModels
         Private _suppressLibrarySelectionLoad As Boolean
 
         Public Sub New()
+            Me.New(
+                Global.MyAnimeScreen.App.AppServices.AnimeApiClient,
+                Global.MyAnimeScreen.App.AppServices.AnimeRepository,
+                Global.MyAnimeScreen.App.AppServices.UserAnimeRepository
+            )
+        End Sub
+
+        Public Sub New(animeApiClient As IAnimeApiClient, animeRepository As AnimeRepository, userAnimeRepository As UserAnimeRepository)
+            _animeApiClient = animeApiClient
+            _animeRepository = animeRepository
+            _userAnimeRepository = userAnimeRepository
             Results = New ObservableCollection(Of Anime)()
             LibraryItems = New ObservableCollection(Of LibraryAnimeItem)()
             _searchCommand = New RelayCommand(AddressOf ExecuteSearch, AddressOf CanExecuteSearch)
@@ -342,7 +357,7 @@ Namespace ViewModels
             ErrorMessage = String.Empty
 
             Try
-                Dim apiClient = Global.MyAnimeScreen.App.AppServices.AnimeApiClient
+                Dim apiClient = _animeApiClient
                 If apiClient Is Nothing Then
                     Throw New InvalidOperationException("Serviço de API não inicializado.")
                 End If
@@ -355,7 +370,7 @@ Namespace ViewModels
                 Next
 
                 If Results.Count > 0 Then
-                    Dim animeRepository = Global.MyAnimeScreen.App.AppServices.AnimeRepository
+                    Dim animeRepository = _animeRepository
                     If animeRepository Is Nothing Then
                         ErrorMessage = "Busca concluída, mas o repositório local não está inicializado."
                     Else
@@ -386,7 +401,7 @@ Namespace ViewModels
             ErrorMessage = String.Empty
 
             Try
-                Dim userAnimeRepository = Global.MyAnimeScreen.App.AppServices.UserAnimeRepository
+                Dim userAnimeRepository = _userAnimeRepository
                 If userAnimeRepository Is Nothing Then
                     Throw New InvalidOperationException("Repositório local não inicializado.")
                 End If
@@ -411,8 +426,8 @@ Namespace ViewModels
             ErrorMessage = String.Empty
 
             Try
-                Dim animeRepository = Global.MyAnimeScreen.App.AppServices.AnimeRepository
-                Dim userAnimeRepository = Global.MyAnimeScreen.App.AppServices.UserAnimeRepository
+                Dim animeRepository = _animeRepository
+                Dim userAnimeRepository = _userAnimeRepository
                 If animeRepository Is Nothing OrElse userAnimeRepository Is Nothing Then
                     Throw New InvalidOperationException("Repositórios locais não inicializados.")
                 End If
@@ -449,7 +464,7 @@ Namespace ViewModels
                     Return
                 End If
 
-                Dim userAnimeRepository = Global.MyAnimeScreen.App.AppServices.UserAnimeRepository
+                Dim userAnimeRepository = _userAnimeRepository
                 If userAnimeRepository Is Nothing Then
                     Return
                 End If
@@ -490,7 +505,7 @@ Namespace ViewModels
             IsLibraryLoading = True
 
             Try
-                Dim userAnimeRepository = Global.MyAnimeScreen.App.AppServices.UserAnimeRepository
+                Dim userAnimeRepository = _userAnimeRepository
                 If userAnimeRepository Is Nothing Then
                     If requestedVersion = _libraryLoadVersion Then
                         LibraryItems.Clear()
@@ -557,7 +572,7 @@ Namespace ViewModels
 
         Private Async Function LoadAnimeFromLibrarySelectionAsync(selectedItem As LibraryAnimeItem) As Task
             Try
-                Dim animeRepository = Global.MyAnimeScreen.App.AppServices.AnimeRepository
+                Dim animeRepository = _animeRepository
                 If animeRepository Is Nothing Then
                     Return
                 End If
