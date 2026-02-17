@@ -1,10 +1,12 @@
 Imports System.Collections.ObjectModel
+Imports System.Collections.Generic
 Imports System.ComponentModel
 Imports System.Runtime.CompilerServices
 Imports System.Threading.Tasks
 Imports System.Windows.Input
 Imports MyAnimeScreen.App.Commands
 Imports MyAnimeScreen.App.Models
+Imports MyAnimeScreen.App.Services.Data
 
 Namespace ViewModels
     Public Class MainViewModel
@@ -123,6 +125,18 @@ Namespace ViewModels
                     Results.Add(item)
                 Next
 
+                If Results.Count > 0 Then
+                    Dim animeRepository = Global.MyAnimeScreen.App.AppServices.AnimeRepository
+                    If animeRepository Is Nothing Then
+                        ErrorMessage = "Busca concluída, mas o repositório local não está inicializado."
+                    Else
+                        Dim failedRows = Await PersistSearchResultsAsync(Results, animeRepository).ConfigureAwait(True)
+                        If failedRows > 0 Then
+                            ErrorMessage = $"Busca concluída, mas {failedRows} resultado(s) não foram salvos localmente."
+                        End If
+                    End If
+                End If
+
                 SelectedAnime = If(Results.Count > 0, Results(0), Nothing)
             Catch ex As Exception
                 Results.Clear()
@@ -131,6 +145,20 @@ Namespace ViewModels
             Finally
                 IsLoading = False
             End Try
+        End Function
+
+        Private Shared Async Function PersistSearchResultsAsync(items As IEnumerable(Of Anime), animeRepository As AnimeRepository) As Task(Of Integer)
+            Dim failures = 0
+
+            For Each item In items
+                Try
+                    item.Id = Await animeRepository.UpsertAsync(item).ConfigureAwait(True)
+                Catch
+                    failures += 1
+                End Try
+            Next
+
+            Return failures
         End Function
 
         Private Sub OnPropertyChanged(<CallerMemberName> Optional propertyName As String = Nothing)
