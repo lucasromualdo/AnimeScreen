@@ -13,7 +13,22 @@ Namespace Services.Api
         Private Shared ReadOnly _jsonOptions As New JsonSerializerOptions With {
             .PropertyNameCaseInsensitive = True
         }
-        Private Shared ReadOnly _httpClient As HttpClient = CreateHttpClient()
+        Private ReadOnly _httpClient As HttpClient
+        Private ReadOnly _delayAsync As Func(Of TimeSpan, Task)
+
+        Public Sub New()
+            Me.New(CreateHttpClient(), Function(delay) Task.Delay(delay))
+        End Sub
+
+        Public Sub New(httpClient As HttpClient, Optional delayAsync As Func(Of TimeSpan, Task) = Nothing)
+            If httpClient Is Nothing Then
+                Throw New ArgumentNullException(NameOf(httpClient))
+            End If
+
+            Dim defaultDelay As Func(Of TimeSpan, Task) = Function(delay) Task.Delay(delay)
+            _httpClient = httpClient
+            _delayAsync = If(delayAsync, defaultDelay)
+        End Sub
 
         Public Async Function SearchAsync(title As String, Optional maxRows As Integer = 25) As Task(Of IReadOnlyList(Of Anime)) Implements IAnimeApiClient.SearchAsync
             If String.IsNullOrWhiteSpace(title) Then
@@ -64,7 +79,7 @@ Namespace Services.Api
             Return client
         End Function
 
-        Private Shared Async Function GetJsonAsync(Of T)(relativePath As String) As Task(Of T)
+        Private Async Function GetJsonAsync(Of T)(relativePath As String) As Task(Of T)
             For attempt = 1 To MaxRequestAttempts
                 Dim retryDelay As TimeSpan? = Nothing
                 Dim networkError As HttpRequestException = Nothing
@@ -119,7 +134,7 @@ Namespace Services.Api
                 End Try
 
                 If retryDelay.HasValue Then
-                    Await Task.Delay(retryDelay.Value).ConfigureAwait(False)
+                    Await _delayAsync(retryDelay.Value).ConfigureAwait(False)
                     Continue For
                 End If
 
