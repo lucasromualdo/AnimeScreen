@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/MyAnimeScreen.App/MyAnimeScreen.App.vbproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MyAnimeScreen.App.Tests/MyAnimeScreen.App.Tests.csproj" />
+  </Folder>
 </Solution>
