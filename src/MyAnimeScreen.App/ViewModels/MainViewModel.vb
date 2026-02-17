@@ -17,6 +17,7 @@ Namespace ViewModels
         Private ReadOnly _refreshLibraryCommand As RelayCommand
         Private _query As String = String.Empty
         Private _selectedAnime As Anime
+        Private _selectedLibraryItem As LibraryAnimeItem
         Private _isLoading As Boolean
         Private _isLibraryLoading As Boolean
         Private _errorMessage As String = String.Empty
@@ -28,6 +29,7 @@ Namespace ViewModels
         Private _libraryFilterStatus As AnimeStatus = AnimeStatus.QueroVer
         Private _selectionLoadVersion As Integer
         Private _libraryLoadVersion As Integer
+        Private _suppressLibrarySelectionLoad As Boolean
 
         Public Sub New()
             Results = New ObservableCollection(Of Anime)()
@@ -73,6 +75,7 @@ Namespace ViewModels
                 Dim currentLoadVersion = _selectionLoadVersion
                 ResetUserEntryDraft()
                 _saveToMyListCommand.RaiseCanExecuteChanged()
+                SyncLibrarySelectionWithSelectedAnime()
 
                 If value IsNot Nothing Then
                     LoadUserEntryForSelectedAnime(value, currentLoadVersion)
@@ -219,6 +222,26 @@ Namespace ViewModels
         End Property
 
         Public ReadOnly Property LibraryItems As ObservableCollection(Of LibraryAnimeItem)
+
+        Public Property SelectedLibraryItem As LibraryAnimeItem
+            Get
+                Return _selectedLibraryItem
+            End Get
+            Set(value As LibraryAnimeItem)
+                If Object.ReferenceEquals(_selectedLibraryItem, value) Then
+                    Return
+                End If
+
+                _selectedLibraryItem = value
+                OnPropertyChanged()
+
+                If _suppressLibrarySelectionLoad OrElse value Is Nothing Then
+                    Return
+                End If
+
+                LoadAnimeFromLibrarySelection(value)
+            End Set
+        End Property
 
         Public Property LibraryFilterStatus As AnimeStatus
             Get
@@ -437,6 +460,8 @@ Namespace ViewModels
                 For Each row In libraryRows
                     LibraryItems.Add(row)
                 Next
+
+                SyncLibrarySelectionWithSelectedAnime()
             Catch ex As Exception
                 If requestedVersion = _libraryLoadVersion Then
                     ErrorMessage = $"Falha ao carregar biblioteca local: {ex.Message}"
@@ -461,6 +486,62 @@ Namespace ViewModels
 
             Return failures
         End Function
+
+        Private Async Sub LoadAnimeFromLibrarySelection(selectedItem As LibraryAnimeItem)
+            Await LoadAnimeFromLibrarySelectionAsync(selectedItem).ConfigureAwait(True)
+        End Sub
+
+        Private Async Function LoadAnimeFromLibrarySelectionAsync(selectedItem As LibraryAnimeItem) As Task
+            Try
+                Dim animeRepository = Global.MyAnimeScreen.App.AppServices.AnimeRepository
+                If animeRepository Is Nothing Then
+                    Return
+                End If
+
+                Dim anime = Await animeRepository.GetByIdAsync(selectedItem.AnimeId).ConfigureAwait(True)
+                If anime Is Nothing Then
+                    ErrorMessage = "Anime selecionado não foi encontrado na base local."
+                    Return
+                End If
+
+                If Not Object.ReferenceEquals(SelectedLibraryItem, selectedItem) Then
+                    Return
+                End If
+
+                SelectedAnime = anime
+            Catch ex As Exception
+                ErrorMessage = $"Falha ao abrir item da biblioteca local: {ex.Message}"
+            End Try
+        End Function
+
+        Private Sub SyncLibrarySelectionWithSelectedAnime()
+            Dim matchingItem As LibraryAnimeItem = Nothing
+
+            If _selectedAnime IsNot Nothing AndAlso _selectedAnime.Id > 0 Then
+                For Each libraryItem In LibraryItems
+                    If libraryItem.AnimeId = _selectedAnime.Id Then
+                        matchingItem = libraryItem
+                        Exit For
+                    End If
+                Next
+            End If
+
+            SetSelectedLibraryItemSilently(matchingItem)
+        End Sub
+
+        Private Sub SetSelectedLibraryItemSilently(item As LibraryAnimeItem)
+            If Object.ReferenceEquals(_selectedLibraryItem, item) Then
+                Return
+            End If
+
+            _suppressLibrarySelectionLoad = True
+            Try
+                _selectedLibraryItem = item
+                OnPropertyChanged(NameOf(SelectedLibraryItem))
+            Finally
+                _suppressLibrarySelectionLoad = False
+            End Try
+        End Sub
 
         Private Sub ApplyUserEntry(entry As UserAnime)
             UserStatus = entry.Status

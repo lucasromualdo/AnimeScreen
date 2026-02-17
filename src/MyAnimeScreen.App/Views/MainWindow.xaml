@@ -273,7 +273,8 @@
                     </Grid>
 
                     <ListBox Grid.Row="2"
-                             ItemsSource="{Binding LibraryItems}">
+                             ItemsSource="{Binding LibraryItems}"
+                             SelectedItem="{Binding SelectedLibraryItem, Mode=TwoWay}">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Border Margin="0,0,0,6"
