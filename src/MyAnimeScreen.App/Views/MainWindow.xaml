@@ -1,6 +1,8 @@
 ﻿<Window x:Class="Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:MyAnimeScreen.App.Converters"
+        xmlns:models="clr-namespace:MyAnimeScreen.App.Models"
         Title="MyAnimeScreen"
         Height="620"
         Width="920"
@@ -8,6 +10,14 @@
         MinWidth="700">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <converters:AnimeStatusToTextConverter x:Key="AnimeStatusToTextConverter" />
+        <x:Array x:Key="AnimeStatusValues" Type="{x:Type models:AnimeStatus}">
+            <x:Static Member="models:AnimeStatus.QueroVer" />
+            <x:Static Member="models:AnimeStatus.Assistindo" />
+            <x:Static Member="models:AnimeStatus.Concluido" />
+            <x:Static Member="models:AnimeStatus.Pausado" />
+            <x:Static Member="models:AnimeStatus.Dropado" />
+        </x:Array>
     </Window.Resources>
 
     <Grid Margin="20">
@@ -136,6 +146,63 @@
                             <TextBlock Margin="0,6,0,0"
                                        TextWrapping="Wrap"
                                        Text="{Binding SelectedAnime.Synopsis}" />
+
+                            <Separator Margin="0,16,0,12" />
+
+                            <TextBlock FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Text="Minha Lista" />
+
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock FontWeight="SemiBold" Text="Status" />
+                                    <ComboBox Margin="0,6,0,10"
+                                              ItemsSource="{StaticResource AnimeStatusValues}"
+                                              SelectedItem="{Binding UserStatus, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Converter={StaticResource AnimeStatusToTextConverter}}" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+
+                                    <TextBlock FontWeight="SemiBold" Text="Episódio atual" />
+                                    <TextBox Margin="0,6,0,10"
+                                             Padding="8,6"
+                                             Text="{Binding CurrentEpisode, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+
+                                    <CheckBox Content="Favorito"
+                                              IsChecked="{Binding IsFavorite, Mode=TwoWay}" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock FontWeight="SemiBold" Text="Nota pessoal (0-10)" />
+                                    <TextBox Margin="0,6,0,10"
+                                             Padding="8,6"
+                                             Text="{Binding PersonalScore, Mode=TwoWay, UpdateSourceTrigger=LostFocus, TargetNullValue=''}" />
+
+                                    <TextBlock FontWeight="SemiBold" Text="Notas" />
+                                    <TextBox Margin="0,6,0,0"
+                                             Height="88"
+                                             Padding="8,6"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             VerticalScrollBarVisibility="Auto"
+                                             Text="{Binding UserNotes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Button Margin="0,12,0,0"
+                                    Padding="12,8"
+                                    HorizontalAlignment="Left"
+                                    Command="{Binding SaveToMyListCommand}"
+                                    Content="Salvar na Minha Lista" />
                         </StackPanel>
                     </ScrollViewer>
                 </Border>
