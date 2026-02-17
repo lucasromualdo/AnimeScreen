@@ -100,7 +100,9 @@ WHERE anime_id = @AnimeId;"
     updated_at AS UpdatedAt
 FROM user_anime
 WHERE status = @Status
-ORDER BY updated_at DESC;"
+ORDER BY
+    is_favorite DESC,
+    updated_at DESC;"
 
             Using connection = Await _connectionFactory.CreateOpenConnectionAsync().ConfigureAwait(False)
                 Dim rows = Await connection.QueryAsync(Of UserAnimeRow)(
