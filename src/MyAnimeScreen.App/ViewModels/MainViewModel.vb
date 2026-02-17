@@ -14,21 +14,28 @@ Namespace ViewModels
 
         Private ReadOnly _searchCommand As RelayCommand
         Private ReadOnly _saveToMyListCommand As RelayCommand
+        Private ReadOnly _refreshLibraryCommand As RelayCommand
         Private _query As String = String.Empty
         Private _selectedAnime As Anime
         Private _isLoading As Boolean
+        Private _isLibraryLoading As Boolean
         Private _errorMessage As String = String.Empty
         Private _userStatus As AnimeStatus = AnimeStatus.QueroVer
         Private _currentEpisode As Integer
         Private _personalScore As Double?
         Private _isFavorite As Boolean
         Private _userNotes As String = String.Empty
+        Private _libraryFilterStatus As AnimeStatus = AnimeStatus.QueroVer
         Private _selectionLoadVersion As Integer
+        Private _libraryLoadVersion As Integer
 
         Public Sub New()
             Results = New ObservableCollection(Of Anime)()
+            LibraryItems = New ObservableCollection(Of LibraryAnimeItem)()
             _searchCommand = New RelayCommand(AddressOf ExecuteSearch, AddressOf CanExecuteSearch)
             _saveToMyListCommand = New RelayCommand(AddressOf ExecuteSaveToMyList, AddressOf CanExecuteSaveToMyList)
+            _refreshLibraryCommand = New RelayCommand(AddressOf ExecuteRefreshLibrary, AddressOf CanExecuteRefreshLibrary)
+            ScheduleLibraryReload()
         End Sub
 
         Public Event PropertyChanged As PropertyChangedEventHandler Implements INotifyPropertyChanged.PropertyChanged
@@ -109,6 +116,21 @@ Namespace ViewModels
             Get
                 Return Not String.IsNullOrWhiteSpace(ErrorMessage)
             End Get
+        End Property
+
+        Public Property IsLibraryLoading As Boolean
+            Get
+                Return _isLibraryLoading
+            End Get
+            Set(value As Boolean)
+                If _isLibraryLoading = value Then
+                    Return
+                End If
+
+                _isLibraryLoading = value
+                OnPropertyChanged()
+                _refreshLibraryCommand.RaiseCanExecuteChanged()
+            End Set
         End Property
 
         Public ReadOnly Property SearchCommand As ICommand
@@ -196,6 +218,29 @@ Namespace ViewModels
             End Get
         End Property
 
+        Public ReadOnly Property LibraryItems As ObservableCollection(Of LibraryAnimeItem)
+
+        Public Property LibraryFilterStatus As AnimeStatus
+            Get
+                Return _libraryFilterStatus
+            End Get
+            Set(value As AnimeStatus)
+                If _libraryFilterStatus = value Then
+                    Return
+                End If
+
+                _libraryFilterStatus = value
+                OnPropertyChanged()
+                ScheduleLibraryReload()
+            End Set
+        End Property
+
+        Public ReadOnly Property RefreshLibraryCommand As ICommand
+            Get
+                Return _refreshLibraryCommand
+            End Get
+        End Property
+
         Private Function CanExecuteSearch(parameter As Object) As Boolean
             Return (Not IsLoading) AndAlso (Not String.IsNullOrWhiteSpace(Query))
         End Function
@@ -204,12 +249,20 @@ Namespace ViewModels
             Return (Not IsLoading) AndAlso SelectedAnime IsNot Nothing
         End Function
 
+        Private Function CanExecuteRefreshLibrary(parameter As Object) As Boolean
+            Return Not IsLibraryLoading
+        End Function
+
         Private Async Sub ExecuteSearch(parameter As Object)
             Await SearchAsync().ConfigureAwait(True)
         End Sub
 
         Private Async Sub ExecuteSaveToMyList(parameter As Object)
             Await SaveToMyListAsync().ConfigureAwait(True)
+        End Sub
+
+        Private Sub ExecuteRefreshLibrary(parameter As Object)
+            ScheduleLibraryReload()
         End Sub
 
         Private Async Function SearchAsync() As Task
@@ -281,6 +334,7 @@ Namespace ViewModels
                 }
 
                 Await userAnimeRepository.UpsertAsync(entry).ConfigureAwait(True)
+                ScheduleLibraryReload()
             Catch ex As Exception
                 ErrorMessage = $"Falha ao salvar em Minha Lista: {ex.Message}"
             Finally
@@ -321,6 +375,75 @@ Namespace ViewModels
             Catch ex As Exception
                 If loadVersion = _selectionLoadVersion Then
                     ErrorMessage = $"Falha ao carregar dados da Minha Lista: {ex.Message}"
+                End If
+            End Try
+        End Function
+
+        Private Sub ScheduleLibraryReload()
+            _libraryLoadVersion += 1
+            Dim requestedVersion = _libraryLoadVersion
+            LoadLibraryForCurrentFilter(requestedVersion)
+        End Sub
+
+        Private Async Sub LoadLibraryForCurrentFilter(requestedVersion As Integer)
+            Await LoadLibraryForCurrentFilterAsync(requestedVersion).ConfigureAwait(True)
+        End Sub
+
+        Private Async Function LoadLibraryForCurrentFilterAsync(requestedVersion As Integer) As Task
+            IsLibraryLoading = True
+
+            Try
+                Dim animeRepository = Global.MyAnimeScreen.App.AppServices.AnimeRepository
+                Dim userAnimeRepository = Global.MyAnimeScreen.App.AppServices.UserAnimeRepository
+                If animeRepository Is Nothing OrElse userAnimeRepository Is Nothing Then
+                    If requestedVersion = _libraryLoadVersion Then
+                        LibraryItems.Clear()
+                    End If
+
+                    Return
+                End If
+
+                Dim userItems = Await userAnimeRepository.ListByStatusAsync(LibraryFilterStatus).ConfigureAwait(True)
+                If requestedVersion <> _libraryLoadVersion Then
+                    Return
+                End If
+
+                Dim libraryRows = New List(Of LibraryAnimeItem)
+                For Each userItem In userItems
+                    Dim anime = Await animeRepository.GetByIdAsync(userItem.AnimeId).ConfigureAwait(True)
+                    If requestedVersion <> _libraryLoadVersion Then
+                        Return
+                    End If
+
+                    If anime Is Nothing Then
+                        Continue For
+                    End If
+
+                    libraryRows.Add(New LibraryAnimeItem With {
+                        .AnimeId = userItem.AnimeId,
+                        .Title = anime.Title,
+                        .Status = userItem.Status,
+                        .CurrentEpisode = userItem.CurrentEpisode,
+                        .PersonalScore = userItem.PersonalScore,
+                        .IsFavorite = userItem.IsFavorite
+                    })
+                Next
+
+                If requestedVersion <> _libraryLoadVersion Then
+                    Return
+                End If
+
+                LibraryItems.Clear()
+                For Each row In libraryRows
+                    LibraryItems.Add(row)
+                Next
+            Catch ex As Exception
+                If requestedVersion = _libraryLoadVersion Then
+                    ErrorMessage = $"Falha ao carregar biblioteca local: {ex.Message}"
+                End If
+            Finally
+                If requestedVersion = _libraryLoadVersion Then
+                    IsLibraryLoading = False
                 End If
             End Try
         End Function
@@ -370,5 +493,14 @@ Namespace ViewModels
         Private Sub OnPropertyChanged(<CallerMemberName> Optional propertyName As String = Nothing)
             RaiseEvent PropertyChanged(Me, New PropertyChangedEventArgs(propertyName))
         End Sub
+    End Class
+
+    Public Class LibraryAnimeItem
+        Public Property AnimeId As Long
+        Public Property Title As String = String.Empty
+        Public Property Status As AnimeStatus
+        Public Property CurrentEpisode As Integer
+        Public Property PersonalScore As Double?
+        Public Property IsFavorite As Boolean
     End Class
 End Namespace

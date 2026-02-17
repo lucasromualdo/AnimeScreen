@@ -78,6 +78,32 @@ WHERE mal_id = @MalId;"
             End Using
         End Function
 
+        Public Async Function GetByIdAsync(id As Long) As Task(Of Anime)
+            Const sql As String =
+"SELECT
+    id AS Id,
+    mal_id AS MalId,
+    title AS Title,
+    title_jp AS TitleJp,
+    synopsis AS Synopsis,
+    image_url AS ImageUrl,
+    episodes_total AS EpisodesTotal,
+    score AS Score,
+    year AS Year,
+    season AS Season,
+    created_at AS CreatedAt,
+    updated_at AS UpdatedAt
+FROM animes
+WHERE id = @Id;"
+
+            Using connection = Await _connectionFactory.CreateOpenConnectionAsync().ConfigureAwait(False)
+                Return Await connection.QuerySingleOrDefaultAsync(Of Anime)(
+                    sql,
+                    New With {.Id = id}
+                ).ConfigureAwait(False)
+            End Using
+        End Function
+
         Public Async Function SearchByTitleAsync(title As String, Optional maxRows As Integer = 50) As Task(Of IReadOnlyList(Of Anime))
             Dim sanitizedRows = Math.Max(1, Math.Min(maxRows, 200))
 
