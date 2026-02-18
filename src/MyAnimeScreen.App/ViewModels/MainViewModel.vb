@@ -24,7 +24,9 @@ Namespace ViewModels
         Private _query As String = String.Empty
         Private _selectedAnime As Anime
         Private _selectedLibraryItem As LibraryAnimeItem
-        Private _isLoading As Boolean
+        Private _isSearching As Boolean
+        Private _isSavingToMyList As Boolean
+        Private _isRemovingFromMyList As Boolean
         Private _isLibraryLoading As Boolean
         Private _errorMessage As String = String.Empty
         Private _userStatus As AnimeStatus = AnimeStatus.QueroVer
@@ -107,22 +109,61 @@ Namespace ViewModels
             End Set
         End Property
 
-        Public Property IsLoading As Boolean
+        Public Property IsSearching As Boolean
             Get
-                Return _isLoading
+                Return _isSearching
             End Get
-            Set(value As Boolean)
-                If _isLoading = value Then
+            Private Set(value As Boolean)
+                If _isSearching = value Then
                     Return
                 End If
 
-                _isLoading = value
+                _isSearching = value
                 OnPropertyChanged()
-                _searchCommand.RaiseCanExecuteChanged()
-                _saveToMyListCommand.RaiseCanExecuteChanged()
-                _removeFromMyListCommand.RaiseCanExecuteChanged()
-                _openLibraryItemCommand.RaiseCanExecuteChanged()
+                NotifyBusyStateChanged()
             End Set
+        End Property
+
+        Public Property IsSavingToMyList As Boolean
+            Get
+                Return _isSavingToMyList
+            End Get
+            Private Set(value As Boolean)
+                If _isSavingToMyList = value Then
+                    Return
+                End If
+
+                _isSavingToMyList = value
+                OnPropertyChanged()
+                NotifyBusyStateChanged()
+            End Set
+        End Property
+
+        Public Property IsRemovingFromMyList As Boolean
+            Get
+                Return _isRemovingFromMyList
+            End Get
+            Private Set(value As Boolean)
+                If _isRemovingFromMyList = value Then
+                    Return
+                End If
+
+                _isRemovingFromMyList = value
+                OnPropertyChanged()
+                NotifyBusyStateChanged()
+            End Set
+        End Property
+
+        Public ReadOnly Property IsBusy As Boolean
+            Get
+                Return IsSearching OrElse IsSavingToMyList OrElse IsRemovingFromMyList
+            End Get
+        End Property
+
+        Public ReadOnly Property IsLoading As Boolean
+            Get
+                Return IsBusy
+            End Get
         End Property
 
         Public Property ErrorMessage As String
@@ -302,20 +343,29 @@ Namespace ViewModels
             End Get
         End Property
 
+        Private Sub NotifyBusyStateChanged()
+            OnPropertyChanged(NameOf(IsBusy))
+            OnPropertyChanged(NameOf(IsLoading))
+            _searchCommand.RaiseCanExecuteChanged()
+            _saveToMyListCommand.RaiseCanExecuteChanged()
+            _removeFromMyListCommand.RaiseCanExecuteChanged()
+            _openLibraryItemCommand.RaiseCanExecuteChanged()
+        End Sub
+
         Private Function CanExecuteSearch(parameter As Object) As Boolean
-            Return (Not IsLoading) AndAlso (Not String.IsNullOrWhiteSpace(Query))
+            Return (Not IsBusy) AndAlso (Not String.IsNullOrWhiteSpace(Query))
         End Function
 
         Private Function CanExecuteSaveToMyList(parameter As Object) As Boolean
-            Return (Not IsLoading) AndAlso SelectedAnime IsNot Nothing
+            Return (Not IsBusy) AndAlso SelectedAnime IsNot Nothing
         End Function
 
         Private Function CanExecuteRemoveFromMyList(parameter As Object) As Boolean
-            Return (Not IsLoading) AndAlso SelectedAnime IsNot Nothing AndAlso SelectedAnime.Id > 0
+            Return (Not IsBusy) AndAlso SelectedAnime IsNot Nothing AndAlso SelectedAnime.Id > 0
         End Function
 
         Private Function CanExecuteOpenLibraryItem(parameter As Object) As Boolean
-            If IsLoading Then
+            If IsBusy Then
                 Return False
             End If
 
@@ -345,7 +395,7 @@ Namespace ViewModels
         End Sub
 
         Private Async Function SearchAsync() As Task
-            IsLoading = True
+            IsSearching = True
             ErrorMessage = String.Empty
 
             Try
@@ -379,7 +429,7 @@ Namespace ViewModels
                 SelectedAnime = Nothing
                 ErrorMessage = $"Falha na busca: {ex.Message}"
             Finally
-                IsLoading = False
+                IsSearching = False
             End Try
         End Function
 
@@ -389,7 +439,7 @@ Namespace ViewModels
                 Return
             End If
 
-            IsLoading = True
+            IsRemovingFromMyList = True
             ErrorMessage = String.Empty
 
             Try
@@ -404,7 +454,7 @@ Namespace ViewModels
             Catch ex As Exception
                 ErrorMessage = $"Falha ao remover da Minha Lista: {ex.Message}"
             Finally
-                IsLoading = False
+                IsRemovingFromMyList = False
             End Try
         End Function
 
@@ -414,7 +464,7 @@ Namespace ViewModels
                 Return
             End If
 
-            IsLoading = True
+            IsSavingToMyList = True
             ErrorMessage = String.Empty
 
             Try
@@ -442,7 +492,7 @@ Namespace ViewModels
             Catch ex As Exception
                 ErrorMessage = $"Falha ao salvar em Minha Lista: {ex.Message}"
             Finally
-                IsLoading = False
+                IsSavingToMyList = False
             End Try
         End Function
 

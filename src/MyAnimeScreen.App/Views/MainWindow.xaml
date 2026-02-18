@@ -90,12 +90,22 @@
                        FontWeight="SemiBold"
                        Text="{Binding ErrorMessage}" />
 
-            <TextBlock Grid.Row="1"
-                       Margin="0,0,0,10"
-                       FontWeight="SemiBold"
-                       Foreground="#1F2937"
-                       Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"
-                       Text="Carregando resultados..." />
+            <StackPanel Grid.Row="1" Margin="0,0,0,10">
+                <TextBlock FontWeight="SemiBold"
+                           Foreground="#1F2937"
+                           Visibility="{Binding IsSearching, Converter={StaticResource BoolToVisibilityConverter}}"
+                           Text="Carregando resultados..." />
+
+                <TextBlock FontWeight="SemiBold"
+                           Foreground="#1F2937"
+                           Visibility="{Binding IsSavingToMyList, Converter={StaticResource BoolToVisibilityConverter}}"
+                           Text="Salvando na Minha Lista..." />
+
+                <TextBlock FontWeight="SemiBold"
+                           Foreground="#1F2937"
+                           Visibility="{Binding IsRemovingFromMyList, Converter={StaticResource BoolToVisibilityConverter}}"
+                           Text="Removendo da Minha Lista..." />
+            </StackPanel>
 
             <Grid Grid.Row="2" Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>

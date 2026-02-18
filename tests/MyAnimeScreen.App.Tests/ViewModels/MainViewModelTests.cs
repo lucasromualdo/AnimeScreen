@@ -48,6 +48,9 @@ public sealed class MainViewModelTests
         vm.SearchCommand.Execute(null);
         await WaitUntilAsync(() => vm.IsLoading);
 
+        Assert.True(vm.IsSearching);
+        Assert.False(vm.IsSavingToMyList);
+        Assert.False(vm.IsRemovingFromMyList);
         Assert.False(vm.SearchCommand.CanExecute(null));
         vm.SearchCommand.Execute(null);
 
@@ -56,6 +59,9 @@ public sealed class MainViewModelTests
 
         Assert.Equal(1, apiClient.SearchCallCount);
         Assert.Single(vm.Results);
+        Assert.False(vm.IsSearching);
+        Assert.False(vm.IsSavingToMyList);
+        Assert.False(vm.IsRemovingFromMyList);
         Assert.True(vm.SearchCommand.CanExecute(null));
     }
 
