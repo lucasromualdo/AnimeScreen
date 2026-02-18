@@ -13,9 +13,9 @@ Namespace ViewModels
     Public Class MainViewModel
         Implements INotifyPropertyChanged
 
-        Private ReadOnly _searchCommand As RelayCommand
-        Private ReadOnly _saveToMyListCommand As RelayCommand
-        Private ReadOnly _removeFromMyListCommand As RelayCommand
+        Private ReadOnly _searchCommand As AsyncRelayCommand
+        Private ReadOnly _saveToMyListCommand As AsyncRelayCommand
+        Private ReadOnly _removeFromMyListCommand As AsyncRelayCommand
         Private ReadOnly _openLibraryItemCommand As RelayCommand
         Private ReadOnly _refreshLibraryCommand As RelayCommand
         Private ReadOnly _animeApiClient As IAnimeApiClient
@@ -55,9 +55,9 @@ Namespace ViewModels
             _userAnimeRepository = userAnimeRepository
             Results = New ObservableCollection(Of Anime)()
             LibraryItems = New ObservableCollection(Of LibraryAnimeItem)()
-            _searchCommand = New RelayCommand(AddressOf ExecuteSearch, AddressOf CanExecuteSearch)
-            _saveToMyListCommand = New RelayCommand(AddressOf ExecuteSaveToMyList, AddressOf CanExecuteSaveToMyList)
-            _removeFromMyListCommand = New RelayCommand(AddressOf ExecuteRemoveFromMyList, AddressOf CanExecuteRemoveFromMyList)
+            _searchCommand = New AsyncRelayCommand(AddressOf SearchAsync, AddressOf CanExecuteSearch)
+            _saveToMyListCommand = New AsyncRelayCommand(AddressOf SaveToMyListAsync, AddressOf CanExecuteSaveToMyList)
+            _removeFromMyListCommand = New AsyncRelayCommand(AddressOf RemoveFromMyListAsync, AddressOf CanExecuteRemoveFromMyList)
             _openLibraryItemCommand = New RelayCommand(AddressOf ExecuteOpenLibraryItem, AddressOf CanExecuteOpenLibraryItem)
             _refreshLibraryCommand = New RelayCommand(AddressOf ExecuteRefreshLibrary, AddressOf CanExecuteRefreshLibrary)
             ScheduleLibraryReload()
@@ -325,18 +325,6 @@ Namespace ViewModels
         Private Function CanExecuteRefreshLibrary(parameter As Object) As Boolean
             Return Not IsLibraryLoading
         End Function
-
-        Private Async Sub ExecuteSearch(parameter As Object)
-            Await SearchAsync().ConfigureAwait(True)
-        End Sub
-
-        Private Async Sub ExecuteSaveToMyList(parameter As Object)
-            Await SaveToMyListAsync().ConfigureAwait(True)
-        End Sub
-
-        Private Async Sub ExecuteRemoveFromMyList(parameter As Object)
-            Await RemoveFromMyListAsync().ConfigureAwait(True)
-        End Sub
 
         Private Sub ExecuteOpenLibraryItem(parameter As Object)
             Dim item = TryCast(parameter, LibraryAnimeItem)
