@@ -38,6 +38,17 @@ dotnet run --project src/MyAnimeScreen.App/MyAnimeScreen.App.vbproj
 dotnet test MyAnimeScreen.slnx
 ```
 
+## Como gerar build de release
+
+```powershell
+dotnet publish src/MyAnimeScreen.App/MyAnimeScreen.App.vbproj `
+  -c Release `
+  /p:PublishProfile=Release-win-x64
+```
+
+Saida de publish:
+- `artifacts/publish/MyAnimeScreen/win-x64/`
+
 ## Estrutura do projeto
 
 ```text
@@ -74,3 +85,8 @@ Executa em `push` na `main` e em `pull_request`:
 - `dotnet restore MyAnimeScreen.slnx`
 - `dotnet build MyAnimeScreen.slnx --configuration Release --no-restore`
 - `dotnet test MyAnimeScreen.slnx --configuration Release --no-build`
+
+## Release notes
+
+- Processo: `docs/RELEASE.md`
+- Historico de mudancas: `CHANGELOG.md`
