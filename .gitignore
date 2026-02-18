@@ -10,6 +10,7 @@ artifacts/
 # IDE folders
 .vs/
 .vscode/
+.sfdx/
 
 # Logs
 *.log

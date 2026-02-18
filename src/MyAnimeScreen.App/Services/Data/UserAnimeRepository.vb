@@ -10,6 +10,8 @@ Namespace Services.Data
         End Sub
 
         Public Async Function UpsertAsync(entry As UserAnime) As Task(Of Long)
+            ValidateEntry(entry)
+
             Const sql As String =
 "INSERT INTO user_anime (
     anime_id,
@@ -167,6 +169,24 @@ WHERE anime_id = @AnimeId;"
         Private Shared Function ToDatabaseStatus(status As AnimeStatus) As String
             Return status.ToString()
         End Function
+
+        Private Shared Sub ValidateEntry(entry As UserAnime)
+            If entry Is Nothing Then
+                Throw New ArgumentNullException(NameOf(entry))
+            End If
+
+            If entry.AnimeId <= 0 Then
+                Throw New ArgumentOutOfRangeException(NameOf(entry.AnimeId), "AnimeId must be greater than zero.")
+            End If
+
+            If entry.CurrentEpisode < 0 Then
+                Throw New ArgumentOutOfRangeException(NameOf(entry.CurrentEpisode), "CurrentEpisode must be greater than or equal to zero.")
+            End If
+
+            If entry.PersonalScore.HasValue AndAlso (entry.PersonalScore.Value < 0 OrElse entry.PersonalScore.Value > 10) Then
+                Throw New ArgumentOutOfRangeException(NameOf(entry.PersonalScore), "PersonalScore must be between 0 and 10.")
+            End If
+        End Sub
 
         Private Shared Function ParseDatabaseStatus(value As String) As AnimeStatus
             Dim parsed As AnimeStatus

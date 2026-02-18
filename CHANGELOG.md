@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Added repository-level validation in `UserAnimeRepository` to block invalid episode progress and out-of-range personal scores before persistence.
+- Added database `CHECK` constraints for `current_episode` and `personal_score` in `user_anime`.
+- Expanded `UserAnimeRepository` tests to cover invalid persistence attempts.
+- Added `.sfdx/` to `.gitignore` to avoid local tooling noise in the repository.
+
 ## [0.1.0] - 2026-02-18
 
 ### Added

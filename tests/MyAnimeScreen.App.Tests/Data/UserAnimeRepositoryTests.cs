@@ -102,6 +102,34 @@ public sealed class UserAnimeRepositoryTests
         Assert.Contains("Status", error.Message);
     }
 
+    [Fact]
+    public async Task UpsertAsync_WhenCurrentEpisodeIsNegative_ThrowsArgumentOutOfRangeException()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var repository = new UserAnimeRepository(database.ConnectionFactory);
+        var animeId = await database.SeedAnimeAsync(5001, "Clannad");
+        var entry = NewEntry(animeId);
+        entry.CurrentEpisode = -1;
+
+        var error = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => repository.UpsertAsync(entry));
+        Assert.Equal("CurrentEpisode", error.ParamName);
+    }
+
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(10.01)]
+    public async Task UpsertAsync_WhenPersonalScoreIsOutOfRange_ThrowsArgumentOutOfRangeException(double invalidScore)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var repository = new UserAnimeRepository(database.ConnectionFactory);
+        var animeId = await database.SeedAnimeAsync(5002, "K-On!");
+        var entry = NewEntry(animeId);
+        entry.PersonalScore = invalidScore;
+
+        var error = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => repository.UpsertAsync(entry));
+        Assert.Equal("PersonalScore", error.ParamName);
+    }
+
     private static UserAnime NewEntry(long animeId)
     {
         return new UserAnime

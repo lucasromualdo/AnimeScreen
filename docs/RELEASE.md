@@ -3,8 +3,27 @@
 ## Prerequisites
 - Windows machine with .NET SDK 10 installed.
 - Clean working tree on `main`.
+- The new version defined in `src/MyAnimeScreen.App/MyAnimeScreen.App.vbproj`.
 
-## 1. Validate build and tests
+## 1. Choose next version
+
+Use semantic versioning:
+- Patch (`0.1.0` -> `0.1.1`): bug fixes and low-risk adjustments.
+- Minor (`0.1.0` -> `0.2.0`): new features compatible with existing behavior.
+- Major (`0.1.0` -> `1.0.0`): breaking changes.
+
+Update these fields in `src/MyAnimeScreen.App/MyAnimeScreen.App.vbproj`:
+- `<Version>`
+- `<AssemblyVersion>`
+- `<FileVersion>`
+- `<InformationalVersion>`
+
+## 2. Update changelog
+
+- Move release notes from `## [Unreleased]` to `## [<VERSION>] - <YYYY-MM-DD>` in `CHANGELOG.md`.
+- Keep `## [Unreleased]` at the top for future changes.
+
+## 3. Validate build and tests
 
 ```powershell
 dotnet restore MyAnimeScreen.slnx
@@ -12,7 +31,7 @@ dotnet build MyAnimeScreen.slnx --configuration Release --no-restore
 dotnet test MyAnimeScreen.slnx --configuration Release --no-build
 ```
 
-## 2. Publish app artifacts
+## 4. Publish app artifacts
 
 ```powershell
 dotnet publish src/MyAnimeScreen.App/MyAnimeScreen.App.vbproj `
@@ -23,15 +42,21 @@ dotnet publish src/MyAnimeScreen.App/MyAnimeScreen.App.vbproj `
 Published output directory:
 - `artifacts/publish/MyAnimeScreen/win-x64/`
 
-## 3. Create tag and push
+## 5. Create tag and push
+
+Replace `<VERSION>` with the chosen version:
 
 ```powershell
-git tag v0.1.0
 git push origin main
-git push origin v0.1.0
+git tag v<VERSION>
+git push origin v<VERSION>
 ```
 
-## 4. Create GitHub Release
-- Title: `v0.1.0`
+Important:
+- Never retag an already published version.
+- Do not force-push `main`.
+
+## 6. Create GitHub Release
+- Title: `v<VERSION>`
 - Attach files from `artifacts/publish/MyAnimeScreen/win-x64/`
 - Copy notes from `CHANGELOG.md`
