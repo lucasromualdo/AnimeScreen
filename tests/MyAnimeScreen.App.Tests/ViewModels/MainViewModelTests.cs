@@ -11,6 +11,55 @@ namespace MyAnimeScreen.App.Tests.ViewModels;
 public sealed class MainViewModelTests
 {
     [Fact]
+    public async Task SearchCommand_CanExecuteDependeDoEstadoDaConsulta()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var vm = new MainViewModel(new FakeAnimeApiClient(), db.AnimeRepository, db.UserAnimeRepository);
+
+        Assert.False(vm.SearchCommand.CanExecute(null));
+
+        vm.Query = "One Piece";
+        Assert.True(vm.SearchCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task SearchCommand_BloqueiaReentradaEnquantoBuscaEmAndamento()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var apiClient = new FakeAnimeApiClient
+        {
+            SearchGate = gate,
+            SearchResult = new List<Anime>
+            {
+                new()
+                {
+                    MalId = 21,
+                    Title = "One Piece"
+                }
+            }
+        };
+
+        var vm = new MainViewModel(apiClient, db.AnimeRepository, db.UserAnimeRepository)
+        {
+            Query = "One Piece"
+        };
+
+        vm.SearchCommand.Execute(null);
+        await WaitUntilAsync(() => vm.IsLoading);
+
+        Assert.False(vm.SearchCommand.CanExecute(null));
+        vm.SearchCommand.Execute(null);
+
+        gate.SetResult(true);
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Equal(1, apiClient.SearchCallCount);
+        Assert.Single(vm.Results);
+        Assert.True(vm.SearchCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task SearchCommand_QuandoApiRetornaResultados_AtualizaResultadosEPersisteLocalmente()
     {
         await using var db = await TestDatabase.CreateAsync();
@@ -135,6 +184,55 @@ public sealed class MainViewModelTests
         Assert.DoesNotContain(vm.LibraryItems, x => x.AnimeId == animeId);
     }
 
+    [Fact]
+    public async Task SaveToMyListCommand_CanExecuteDependeDoAnimeSelecionado()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var vm = new MainViewModel(new FakeAnimeApiClient(), db.AnimeRepository, db.UserAnimeRepository);
+
+        Assert.False(vm.SaveToMyListCommand.CanExecute(null));
+
+        vm.SelectedAnime = NewAnime(30276, "One Punch Man");
+        Assert.True(vm.SaveToMyListCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task SelectedLibraryItem_QuandoDefinido_CarregaAnimeSelecionado()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var animeId = await db.SeedAnimeAsync(44511, "Chainsaw Man");
+        await db.UserAnimeRepository.UpsertAsync(new UserAnime
+        {
+            AnimeId = animeId,
+            Status = AnimeStatus.QueroVer
+        });
+
+        var vm = new MainViewModel(new FakeAnimeApiClient(), db.AnimeRepository, db.UserAnimeRepository)
+        {
+            LibraryFilterStatus = AnimeStatus.QueroVer
+        };
+
+        await WaitForBackgroundWorkAsync(vm);
+        var item = Assert.Single(vm.LibraryItems);
+
+        Assert.True(vm.OpenLibraryItemCommand.CanExecute(item));
+        vm.SelectedLibraryItem = item;
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.NotNull(vm.SelectedAnime);
+        Assert.Equal(item.AnimeId, vm.SelectedAnime!.Id);
+    }
+
+    [Fact]
+    public async Task PersonalScore_QuandoForaDoIntervalo_LancaExcecao()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var vm = new MainViewModel(new FakeAnimeApiClient(), db.AnimeRepository, db.UserAnimeRepository);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => vm.PersonalScore = -0.1);
+        Assert.Throws<ArgumentOutOfRangeException>(() => vm.PersonalScore = 10.1);
+    }
+
     private static async Task WaitForBackgroundWorkAsync(MainViewModel vm, int timeoutMs = 5000)
     {
         var timeout = TimeSpan.FromMilliseconds(timeoutMs);
@@ -162,25 +260,63 @@ public sealed class MainViewModelTests
         throw new TimeoutException("Timeout aguardando finalizacao de operacoes async do MainViewModel.");
     }
 
+    private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 5000)
+    {
+        var timeout = TimeSpan.FromMilliseconds(timeoutMs);
+        var sw = Stopwatch.StartNew();
+
+        while (sw.Elapsed < timeout)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(20);
+        }
+
+        throw new TimeoutException("Condicao esperada nao foi atingida no tempo limite.");
+    }
+
+    private static Anime NewAnime(int malId, string title)
+    {
+        return new Anime
+        {
+            MalId = malId,
+            Title = title
+        };
+    }
+
     private sealed class FakeAnimeApiClient : IAnimeApiClient
     {
         public IReadOnlyList<Anime> SearchResult { get; init; } = Array.Empty<Anime>();
 
         public Exception? SearchException { get; init; }
 
+        public TaskCompletionSource<bool>? SearchGate { get; init; }
+
+        public int SearchCallCount { get; private set; }
+
         public Task<Anime> GetByMalIdAsync(int malId)
         {
             return Task.FromResult(new Anime { MalId = malId, Title = $"Anime {malId}" });
         }
 
-        public Task<IReadOnlyList<Anime>> SearchAsync(string title, int maxRows = 25)
+        public async Task<IReadOnlyList<Anime>> SearchAsync(string title, int maxRows = 25)
         {
+            SearchCallCount++;
+
+            if (SearchGate is not null)
+            {
+                await SearchGate.Task;
+            }
+
             if (SearchException is not null)
             {
                 throw SearchException;
             }
 
-            return Task.FromResult(SearchResult);
+            return SearchResult;
         }
     }
 
