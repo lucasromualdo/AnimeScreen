@@ -233,6 +233,25 @@ public sealed class MainViewModelTests
         Assert.Throws<ArgumentOutOfRangeException>(() => vm.PersonalScore = 10.1);
     }
 
+    [Fact]
+    public async Task SelectedLibraryItem_QuandoAnimeNaoExiste_ExibeMensagemCorretaSemMojibake()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var vm = new MainViewModel(new FakeAnimeApiClient(), db.AnimeRepository, db.UserAnimeRepository);
+
+        vm.SelectedLibraryItem = new LibraryAnimeItem
+        {
+            AnimeId = 999_999,
+            Title = "Inexistente",
+            Status = AnimeStatus.QueroVer
+        };
+
+        await WaitUntilAsync(() => vm.HasError);
+
+        Assert.Equal("Anime selecionado não foi encontrado na base local.", vm.ErrorMessage);
+        Assert.DoesNotContain("Ã", vm.ErrorMessage, StringComparison.Ordinal);
+    }
+
     private static async Task WaitForBackgroundWorkAsync(MainViewModel vm, int timeoutMs = 5000)
     {
         var timeout = TimeSpan.FromMilliseconds(timeoutMs);
