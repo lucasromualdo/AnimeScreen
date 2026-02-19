@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - Expanded `UserAnimeRepository` tests to cover invalid persistence attempts.
 - Added `.sfdx/` to `.gitignore` to avoid local tooling noise in the repository.
 
+### Fixed
+- Startup failure handling now classifies and displays root-cause category (`DadosLocais`, `BancoLocal`, `Rede`, `Aplicacao`) with test coverage for formatting and classification paths.
+- `AsyncRelayCommand` now observes and logs unhandled async exceptions (`Trace.TraceError`) without crashing the UI, with dedicated exception-path tests.
+
 ## [0.1.0] - 2026-02-18
 
 ### Added
