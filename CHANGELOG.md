@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-02-19
+
 ### Changed
 - Added repository-level validation in `UserAnimeRepository` to block invalid episode progress and out-of-range personal scores before persistence.
 - Added database `CHECK` constraints for `current_episode` and `personal_score` in `user_anime`.
@@ -26,3 +28,4 @@ All notable changes to this project will be documented in this file.
 - MainViewModel async actions migrated to `AsyncRelayCommand` for safer execution.
 - Test coverage expanded for command behavior, selection flow, and score validation.
 - Guard test added to prevent mojibake regressions in error messages.
+
