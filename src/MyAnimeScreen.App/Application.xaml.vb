@@ -39,8 +39,10 @@ Class Application
             MainWindow = mainWindow
             mainWindow.Show()
         Catch ex As Exception
+            Dim failureMessage = StartupFailureFormatter.BuildMessage(startupStep, ex)
+            Dim failureCategory = StartupFailureFormatter.BuildCategory(ex)
             MessageBox.Show(
-                StartupFailureFormatter.BuildMessage(startupStep, ex),
+                $"{failureMessage}{Environment.NewLine}Categoria: {failureCategory}",
                 "MyAnimeScreen",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error

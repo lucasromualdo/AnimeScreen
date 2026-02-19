@@ -35,4 +35,44 @@ public sealed class StartupFailureFormatterTests
 
         Assert.Equal("ex", error.ParamName);
     }
+
+    [Fact]
+    public void BuildCategory_QuandoErroDeDadosLocais_DeveRetornarDadosLocais()
+    {
+        var root = new FileNotFoundException("schema ausente.");
+        var wrapped = new Exception("falha generica.", root);
+
+        var category = StartupFailureFormatter.BuildCategory(wrapped);
+
+        Assert.Equal("DadosLocais", category);
+    }
+
+    [Fact]
+    public void BuildCategory_QuandoErroDeRedeAninhado_DeveRetornarRede()
+    {
+        var root = new HttpRequestException("timeout.");
+        var wrapped = new Exception("falha generica.", new InvalidOperationException("wrapper.", root));
+
+        var category = StartupFailureFormatter.BuildCategory(wrapped);
+
+        Assert.Equal("Rede", category);
+    }
+
+    [Fact]
+    public void BuildCategory_QuandoErroNaoMapeado_DeveRetornarAplicacao()
+    {
+        var ex = new InvalidOperationException("erro qualquer.");
+
+        var category = StartupFailureFormatter.BuildCategory(ex);
+
+        Assert.Equal("Aplicacao", category);
+    }
+
+    [Fact]
+    public void BuildCategory_QuandoExcecaoNula_DeveLancarArgumentNullException()
+    {
+        var error = Assert.Throws<ArgumentNullException>(() => StartupFailureFormatter.BuildCategory(null!));
+
+        Assert.Equal("ex", error.ParamName);
+    }
 }
