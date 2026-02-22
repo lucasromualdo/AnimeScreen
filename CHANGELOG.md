@@ -4,11 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-22
+
 ### Added
+- Anime cover images are now displayed in search results and in the details panel (`#5`).
 - Local library filter now supports a `Todos` option to display all saved entries without status restriction (`#4`).
 - Search now falls back to local cache (`AnimeRepository.SearchByTitleAsync`) when the Jikan API is unavailable, with user-facing context messaging (`#7`).
 - Test coverage for library filter `Todos` behavior and offline search fallback paths.
-
 ## [0.1.1] - 2026-02-19
 
 ### Changed

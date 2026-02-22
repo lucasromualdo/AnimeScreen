@@ -12,6 +12,7 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
         <converters:AnimeStatusToTextConverter x:Key="AnimeStatusToTextConverter" />
+        <converters:ImageUrlToBitmapImageConverter x:Key="ImageUrlToBitmapImageConverter" />
         <x:Array x:Key="AnimeStatusValues" Type="{x:Type models:AnimeStatus}">
             <x:Static Member="models:AnimeStatus.QueroVer" />
             <x:Static Member="models:AnimeStatus.Assistindo" />
@@ -136,14 +137,48 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border Padding="4">
-                                        <StackPanel>
-                                            <TextBlock FontWeight="SemiBold"
-                                                       Text="{Binding Title}" />
-                                            <TextBlock Margin="0,2,0,0"
-                                                       FontSize="12"
-                                                       Foreground="#6B7280"
-                                                       Text="{Binding Score, StringFormat=Nota: {0:F2}}" />
-                                        </StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="56" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <Border Grid.Column="0"
+                                                    Width="56"
+                                                    Height="80"
+                                                    Background="#F3F4F6"
+                                                    BorderBrush="#E5E7EB"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4"
+                                                    ClipToBounds="True">
+                                                <Grid>
+                                                    <TextBlock HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"
+                                                               TextAlignment="Center"
+                                                               FontSize="10"
+                                                               Foreground="#6B7280"
+                                                               Text="Sem capa" />
+
+                                                    <Image x:Name="ResultCoverImage"
+                                                           DataContextChanged="OnCoverImageDataContextChanged"
+                                                           ImageFailed="OnCoverImageFailed"
+                                                           Stretch="UniformToFill"
+                                                           Source="{Binding ImageUrl, Converter={StaticResource ImageUrlToBitmapImageConverter}, ConverterParameter=112}" />
+                                                </Grid>
+                                            </Border>
+
+                                            <StackPanel Grid.Column="2"
+                                                        VerticalAlignment="Center">
+                                                <TextBlock FontWeight="SemiBold"
+                                                           Text="{Binding Title}"
+                                                           TextWrapping="Wrap" />
+                                                <TextBlock Margin="0,2,0,0"
+                                                           FontSize="12"
+                                                           Foreground="#6B7280"
+                                                           Text="{Binding Score, StringFormat=Nota: {0:F2}}" />
+                                            </StackPanel>
+                                        </Grid>
                                     </Border>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
@@ -158,6 +193,31 @@
                         Padding="12">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
+                            <Border Width="180"
+                                    Height="256"
+                                    Margin="0,0,0,12"
+                                    HorizontalAlignment="Left"
+                                    Background="#F3F4F6"
+                                    BorderBrush="#E5E7EB"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    ClipToBounds="True">
+                                <Grid>
+                                    <TextBlock HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               TextAlignment="Center"
+                                               FontWeight="SemiBold"
+                                               Foreground="#6B7280"
+                                               Text="Sem capa&#10;(offline)" />
+
+                                    <Image x:Name="DetailCoverImage"
+                                           DataContextChanged="OnCoverImageDataContextChanged"
+                                           ImageFailed="OnCoverImageFailed"
+                                           Stretch="UniformToFill"
+                                           Source="{Binding SelectedAnime.ImageUrl, Converter={StaticResource ImageUrlToBitmapImageConverter}, ConverterParameter=360}" />
+                                </Grid>
+                            </Border>
+
                             <TextBlock FontSize="18"
                                        FontWeight="SemiBold"
                                        Text="{Binding SelectedAnime.Title}" />
