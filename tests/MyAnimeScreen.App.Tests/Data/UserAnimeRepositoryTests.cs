@@ -75,6 +75,39 @@ public sealed class UserAnimeRepositoryTests
     }
 
     [Fact]
+    public async Task ListLibraryByStatusAsync_WhenStatusIsNull_ReturnsAllStatusesKeepingFavoriteOrdering()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var repository = new UserAnimeRepository(database.ConnectionFactory);
+        var firstAnimeId = await database.SeedAnimeAsync(2101, "Monster");
+        var secondAnimeId = await database.SeedAnimeAsync(2102, "Violet Evergarden");
+        var thirdAnimeId = await database.SeedAnimeAsync(2103, "Mob Psycho 100");
+
+        var firstEntry = NewEntry(firstAnimeId);
+        firstEntry.Status = AnimeStatus.Assistindo;
+        firstEntry.IsFavorite = false;
+        await repository.UpsertAsync(firstEntry);
+
+        var favoriteEntry = NewEntry(secondAnimeId);
+        favoriteEntry.Status = AnimeStatus.Concluido;
+        favoriteEntry.IsFavorite = true;
+        await repository.UpsertAsync(favoriteEntry);
+
+        var thirdEntry = NewEntry(thirdAnimeId);
+        thirdEntry.Status = AnimeStatus.Pausado;
+        thirdEntry.IsFavorite = false;
+        await repository.UpsertAsync(thirdEntry);
+
+        var rows = await repository.ListLibraryByStatusAsync(null);
+
+        Assert.Equal(3, rows.Count);
+        Assert.Equal(secondAnimeId, rows[0].AnimeId);
+        Assert.True(rows[0].IsFavorite);
+        Assert.Contains(rows, x => x.AnimeId == firstAnimeId && x.Status == AnimeStatus.Assistindo);
+        Assert.Contains(rows, x => x.AnimeId == thirdAnimeId && x.Status == AnimeStatus.Pausado);
+    }
+
+    [Fact]
     public async Task DeleteByAnimeIdAsync_RemovesEntry()
     {
         await using var database = await TestDatabase.CreateAsync();

@@ -230,6 +230,49 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task LibraryFilterStatus_QuandoTodos_PermiteAlternarECarregaItensDeTodosOsStatus()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var assistindoId = await db.SeedAnimeAsync(51001, "Frieren");
+        var pausadoId = await db.SeedAnimeAsync(51002, "Bleach");
+
+        await db.UserAnimeRepository.UpsertAsync(new UserAnime
+        {
+            AnimeId = assistindoId,
+            Status = AnimeStatus.Assistindo,
+            IsFavorite = true
+        });
+
+        await db.UserAnimeRepository.UpsertAsync(new UserAnime
+        {
+            AnimeId = pausadoId,
+            Status = AnimeStatus.Pausado,
+            IsFavorite = false
+        });
+
+        var vm = new MainViewModel(new FakeAnimeApiClient(), db.AnimeRepository, db.UserAnimeRepository);
+
+        vm.LibraryFilterStatus = null;
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Equal(2, vm.LibraryItems.Count);
+        Assert.Contains(vm.LibraryItems, x => x.AnimeId == assistindoId && x.Status == AnimeStatus.Assistindo);
+        Assert.Contains(vm.LibraryItems, x => x.AnimeId == pausadoId && x.Status == AnimeStatus.Pausado);
+
+        vm.LibraryFilterStatus = AnimeStatus.Assistindo;
+        await WaitForBackgroundWorkAsync(vm);
+
+        var filtered = Assert.Single(vm.LibraryItems);
+        Assert.Equal(assistindoId, filtered.AnimeId);
+        Assert.Equal(AnimeStatus.Assistindo, filtered.Status);
+
+        vm.LibraryFilterStatus = null;
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Equal(2, vm.LibraryItems.Count);
+    }
+
+    [Fact]
     public async Task PersonalScore_QuandoForaDoIntervalo_LancaExcecao()
     {
         await using var db = await TestDatabase.CreateAsync();

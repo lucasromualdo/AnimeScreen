@@ -121,7 +121,7 @@ ORDER BY
             End Using
         End Function
 
-        Public Async Function ListLibraryByStatusAsync(status As AnimeStatus) As Task(Of IReadOnlyList(Of LibraryAnimeSnapshot))
+        Public Async Function ListLibraryByStatusAsync(status As AnimeStatus?) As Task(Of IReadOnlyList(Of LibraryAnimeSnapshot))
             Const sql As String =
 "SELECT
     ua.anime_id AS AnimeId,
@@ -133,15 +133,20 @@ ORDER BY
 FROM user_anime ua
 INNER JOIN animes a
     ON a.id = ua.anime_id
-WHERE ua.status = @Status
+WHERE (@Status IS NULL OR ua.status = @Status)
 ORDER BY
     ua.is_favorite DESC,
     ua.updated_at DESC;"
 
             Using connection = Await _connectionFactory.CreateOpenConnectionAsync().ConfigureAwait(False)
+                Dim databaseStatus As String = Nothing
+                If status.HasValue Then
+                    databaseStatus = ToDatabaseStatus(status.Value)
+                End If
+
                 Dim rows = Await connection.QueryAsync(Of LibraryAnimeSnapshotRow)(
                     sql,
-                    New With {.Status = ToDatabaseStatus(status)}
+                    New With {.Status = databaseStatus}
                 ).ConfigureAwait(False)
 
                 Dim result = New List(Of LibraryAnimeSnapshot)
