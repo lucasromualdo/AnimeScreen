@@ -2,16 +2,18 @@
 
 Aplicativo desktop em VB.NET (WPF) para buscar animes na Jikan API, salvar dados localmente em SQLite e gerenciar a "Minha Lista".
 
-## Status do projeto (2026-02-19)
+## Status do projeto (2026-02-22)
 
 - Milestone `v0.1.1` concluido e fechado no GitHub.
+- Milestone `v0.2.0` em andamento: `#4` e `#7` concluidas; `#5` permanece aberta.
 - Bugs de estabilizacao resolvidos: `#1`, `#2`, `#3`.
-- Backlog atual: expansoes abertas `#4` a `#10`.
-- Proximas prioridades sugeridas: `#4` (filtro "Todos") e `#7` (busca offline com fallback).
+- Backlog atual: expansoes abertas `#5`, `#6`, `#8`, `#9`, `#10`.
+- Proxima prioridade sugerida: `#5` (exibir capa do anime nos resultados e detalhe).
 
 ## Principais funcionalidades
 
 - Busca por titulo via Jikan API.
+- Busca offline local com fallback para cache quando a API estiver indisponivel.
 - Persistencia local de resultados em `animes` (upsert).
 - Gestao da "Minha Lista" com:
   - status (`QueroVer`, `Assistindo`, `Concluido`, `Pausado`, `Dropado`)
@@ -19,7 +21,7 @@ Aplicativo desktop em VB.NET (WPF) para buscar animes na Jikan API, salvar dados
   - nota pessoal
   - favorito
   - notas
-- Biblioteca local com filtro por status.
+- Biblioteca local com filtro por status e opcao `Todos`.
 - Validacoes de entrada para campos numericos.
 - Pipeline CI (build + testes) no GitHub Actions.
 
@@ -27,7 +29,7 @@ Aplicativo desktop em VB.NET (WPF) para buscar animes na Jikan API, salvar dados
 
 - Windows (WPF)
 - .NET SDK 10 (`net10.0-windows`)
-- Conexao com internet para consultas na Jikan API
+- Conexao com internet para consultas na Jikan API (uso basico pode operar com cache local)
 
 ## Como executar
 

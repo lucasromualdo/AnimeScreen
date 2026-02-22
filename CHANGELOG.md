@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Local library filter now supports a `Todos` option to display all saved entries without status restriction (`#4`).
+- Search now falls back to local cache (`AnimeRepository.SearchByTitleAsync`) when the Jikan API is unavailable, with user-facing context messaging (`#7`).
+- Test coverage for library filter `Todos` behavior and offline search fallback paths.
+
 ## [0.1.1] - 2026-02-19
 
 ### Changed
