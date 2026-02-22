@@ -406,15 +406,45 @@ Namespace ViewModels
                     Throw New InvalidOperationException("Serviço de API não inicializado.")
                 End If
 
-                Dim items = Await apiClient.SearchAsync(Query.Trim()).ConfigureAwait(True)
+                Dim searchTerm = Query.Trim()
+                Dim animeRepository = _animeRepository
+                Dim items As IReadOnlyList(Of Anime) = Nothing
+                Dim usedLocalFallback = False
+
+                Dim apiEx As Exception = Nothing
+                Try
+                    items = Await apiClient.SearchAsync(searchTerm).ConfigureAwait(True)
+                Catch ex As Exception
+                    apiEx = ex
+                End Try
+
+                If apiEx IsNot Nothing Then
+                    If animeRepository Is Nothing Then
+                        Throw apiEx
+                    End If
+
+                    Try
+                        items = Await animeRepository.SearchByTitleAsync(searchTerm, 25).ConfigureAwait(True)
+                        usedLocalFallback = True
+                    Catch localEx As Exception
+                        Throw New InvalidOperationException(
+                            $"Falha na busca online e no cache local. API: {apiEx.Message}. Cache: {localEx.Message}",
+                            localEx)
+                    End Try
+
+                    If items.Count > 0 Then
+                        ErrorMessage = $"Falha na busca online: {apiEx.Message}. Exibindo resultados do cache local."
+                    Else
+                        ErrorMessage = $"Falha na busca online: {apiEx.Message}. Nenhum resultado encontrado no cache local."
+                    End If
+                End If
 
                 Results.Clear()
                 For Each item In items
                     Results.Add(item)
                 Next
 
-                If Results.Count > 0 Then
-                    Dim animeRepository = _animeRepository
+                If Results.Count > 0 AndAlso Not usedLocalFallback Then
                     If animeRepository Is Nothing Then
                         ErrorMessage = "Busca concluída, mas o repositório local não está inicializado."
                     Else

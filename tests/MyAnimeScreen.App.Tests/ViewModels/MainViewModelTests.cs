@@ -124,6 +124,33 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task SearchCommand_QuandoApiFalha_UsaCacheLocalComoFallbackEInformaContexto()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var localAnimeId = await db.SeedAnimeAsync(12031, "Death Note");
+        var apiClient = new FakeAnimeApiClient
+        {
+            SearchException = new HttpRequestException("Sem conexao.")
+        };
+
+        var vm = new MainViewModel(apiClient, db.AnimeRepository, db.UserAnimeRepository)
+        {
+            Query = "Death"
+        };
+
+        vm.SearchCommand.Execute(null);
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Equal(1, apiClient.SearchCallCount);
+        Assert.Single(vm.Results);
+        Assert.Equal(localAnimeId, vm.Results[0].Id);
+        Assert.Equal("Death Note", vm.Results[0].Title);
+        Assert.NotNull(vm.SelectedAnime);
+        Assert.Equal(localAnimeId, vm.SelectedAnime!.Id);
+        Assert.Contains("cache local", vm.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task SaveToMyListCommand_SalvaEntradaEAtualizaBibliotecaLocal()
     {
         await using var db = await TestDatabase.CreateAsync();
