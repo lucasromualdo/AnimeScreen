@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-02-25
+
+### Fixed
+- "Remover da Minha Lista" no longer clears the local draft fields when no saved `user_anime` entry exists for the selected anime (`#12`).
+- Personal score validation now aligns with binding culture parsing (e.g. `pt-BR`), avoiding inconsistent acceptance of values like `7.5` that the binding converts incorrectly (`#11`).
+
 ## [0.2.0] - 2026-02-22
 
 ### Added

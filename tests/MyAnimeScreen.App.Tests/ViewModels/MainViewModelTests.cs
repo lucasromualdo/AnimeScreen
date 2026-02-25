@@ -218,6 +218,40 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task RemoveFromMyListCommand_QuandoNaoExisteEntradaSalva_NaoDeveLimparRascunho()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var animeId = await db.SeedAnimeAsync(77701, "Solo Leveling");
+        var selectedAnime = await db.AnimeRepository.GetByIdAsync(animeId);
+        Assert.NotNull(selectedAnime);
+
+        var vm = new MainViewModel(new FakeAnimeApiClient(), db.AnimeRepository, db.UserAnimeRepository)
+        {
+            SelectedAnime = selectedAnime!
+        };
+
+        await WaitForBackgroundWorkAsync(vm);
+
+        vm.UserStatus = AnimeStatus.Assistindo;
+        vm.CurrentEpisode = 5;
+        vm.PersonalScore = 8.5;
+        vm.IsFavorite = true;
+        vm.UserNotes = "Rascunho local";
+
+        Assert.True(vm.RemoveFromMyListCommand.CanExecute(null));
+
+        vm.RemoveFromMyListCommand.Execute(null);
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Equal(AnimeStatus.Assistindo, vm.UserStatus);
+        Assert.Equal(5, vm.CurrentEpisode);
+        Assert.Equal(8.5, vm.PersonalScore);
+        Assert.True(vm.IsFavorite);
+        Assert.Equal("Rascunho local", vm.UserNotes);
+        Assert.Null(await db.UserAnimeRepository.GetByAnimeIdAsync(animeId));
+    }
+
+    [Fact]
     public async Task SaveToMyListCommand_CanExecuteDependeDoAnimeSelecionado()
     {
         await using var db = await TestDatabase.CreateAsync();

@@ -33,10 +33,10 @@ Namespace Validation
                 Return ValidationResult.ValidResult
             End If
 
+            Dim parseCulture = If(cultureInfo, CultureInfo.CurrentCulture)
             Const parseStyle As NumberStyles = NumberStyles.AllowLeadingSign Or NumberStyles.AllowDecimalPoint Or NumberStyles.AllowLeadingWhite Or NumberStyles.AllowTrailingWhite
             Dim parsedValue As Double
-            If Not Double.TryParse(text, parseStyle, cultureInfo, parsedValue) AndAlso
-               Not Double.TryParse(text, parseStyle, CultureInfo.InvariantCulture, parsedValue) Then
+            If Not Double.TryParse(text, parseStyle, parseCulture, parsedValue) Then
                 Return New ValidationResult(False, "Use um número válido para nota.")
             End If
 
