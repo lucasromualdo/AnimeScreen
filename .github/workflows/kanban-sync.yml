@@ -19,7 +19,9 @@ jobs:
       # Prefer a PAT with `repo` + `project` scopes stored as PROJECT_AUTOMATION_TOKEN.
       # Fallback to GITHUB_TOKEN (may be insufficient for some user-owned Projects v2 setups).
       GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION_TOKEN || github.token }}
-      PROJECT_OWNER: lucasromualdo
+      # Use @me to avoid owner-resolution issues in GitHub Actions runners.
+      # This requires PROJECT_AUTOMATION_TOKEN to belong to the user who owns the project.
+      PROJECT_OWNER: "@me"
       PROJECT_NUMBER: "2"
       PROJECT_ID: PVT_kwHOAeKIe84BPkG1
       STATUS_FIELD_ID: PVTSSF_lAHOAeKIe84BPkG1zg979Ko
