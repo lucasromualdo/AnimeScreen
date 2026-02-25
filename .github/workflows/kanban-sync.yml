@@ -1,0 +1,71 @@
+name: Kanban Sync
+
+on:
+  issues:
+    types:
+      - opened
+      - reopened
+      - closed
+
+permissions:
+  contents: read
+  issues: read
+  repository-projects: write
+
+jobs:
+  sync-kanban:
+    runs-on: windows-latest
+    env:
+      # Prefer a PAT with `repo` + `project` scopes stored as PROJECT_AUTOMATION_TOKEN.
+      # Fallback to GITHUB_TOKEN (may be insufficient for some user-owned Projects v2 setups).
+      GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION_TOKEN || github.token }}
+      PROJECT_OWNER: lucasromualdo
+      PROJECT_NUMBER: "2"
+      PROJECT_ID: PVT_kwHOAeKIe84BPkG1
+      STATUS_FIELD_ID: PVTSSF_lAHOAeKIe84BPkG1zg979Ko
+      STATUS_TODO_OPTION_ID: f75ad846
+      STATUS_DONE_OPTION_ID: 98236657
+    steps:
+      - name: Sync issue to project status
+        shell: pwsh
+        run: |
+          $action = "${{ github.event.action }}"
+          $issueNumber = [int]"${{ github.event.issue.number }}"
+          $issueUrl = "${{ github.event.issue.html_url }}"
+
+          switch ($action) {
+            "opened"   { $targetStatusOptionId = $env:STATUS_TODO_OPTION_ID; break }
+            "reopened" { $targetStatusOptionId = $env:STATUS_TODO_OPTION_ID; break }
+            "closed"   { $targetStatusOptionId = $env:STATUS_DONE_OPTION_ID; break }
+            default {
+              Write-Host "Action '$action' not handled."
+              exit 0
+            }
+          }
+
+          Write-Host "Syncing issue #$issueNumber ($action) to project '$($env:PROJECT_OWNER)/$($env:PROJECT_NUMBER)'..."
+
+          $projectItemsJson = gh project item-list $env:PROJECT_NUMBER --owner $env:PROJECT_OWNER --format json
+          $projectItems = $projectItemsJson | ConvertFrom-Json
+
+          $item = $projectItems.items |
+            Where-Object { $_.content.type -eq "Issue" -and [int]$_.content.number -eq $issueNumber } |
+            Select-Object -First 1
+
+          if (-not $item) {
+            Write-Host "Issue #$issueNumber is not in project. Adding item..."
+            $addedItemJson = gh project item-add $env:PROJECT_NUMBER --owner $env:PROJECT_OWNER --url $issueUrl --format json
+            $item = $addedItemJson | ConvertFrom-Json
+          }
+
+          if (-not $item -or -not $item.id) {
+            throw "Failed to resolve project item ID for issue #$issueNumber."
+          }
+
+          gh project item-edit `
+            --id $item.id `
+            --project-id $env:PROJECT_ID `
+            --field-id $env:STATUS_FIELD_ID `
+            --single-select-option-id $targetStatusOptionId
+
+          Write-Host "Issue #$issueNumber synchronized successfully."
