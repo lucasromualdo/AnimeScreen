@@ -2,13 +2,28 @@
 
 Aplicativo desktop em VB.NET (WPF) para buscar animes na Jikan API, salvar dados localmente em SQLite e gerenciar a "Minha Lista".
 
-## Status do projeto (2026-02-22)
+## Status do projeto (2026-02-25)
 
-- Milestone `v0.1.1` concluido e fechado no GitHub.
-- Milestone `v0.2.0` concluido: `#4`, `#5` e `#7` concluidas.
-- Bugs de estabilizacao resolvidos: `#1`, `#2`, `#3`.
-- Backlog atual: expansoes abertas `#6`, `#8`, `#9`, `#10`.
-- Proxima prioridade sugerida: revisar e priorizar `#6`, `#8`, `#9` e `#10`.
+- Milestone `v0.2.1` concluido e fechado no GitHub (bugs `#11` e `#12`).
+- Milestones anteriores concluidas: `v0.2.0`, `v0.1.1`.
+- Backlog atual (`v0.3.0`): expansoes abertas `#6`, `#8`, `#9`, `#10`.
+- Proxima prioridade sugerida: escolher e implementar a primeira entrega da `v0.3.0`.
+
+## Download (Windows x64)
+
+- Ultima release: `v0.2.1`
+- Pagina de releases: <https://github.com/lucasromualdo/MyAnimeScreen/releases>
+- Download direto (zip): <https://github.com/lucasromualdo/MyAnimeScreen/releases/download/v0.2.1/MyAnimeScreen-v0.2.1-win-x64.zip>
+
+### Executar a release
+
+1. Baixe e extraia o arquivo `.zip`.
+2. Execute `MyAnimeScreen.App.exe`.
+3. Se necessario, permita a execucao no Windows/SmartScreen.
+
+Observacao:
+- O pacote `v0.2.1` publicado atualmente e **framework-dependent** (requer `.NET Desktop Runtime 10 x64`).
+- O repositorio ja possui perfil e automacao para gerar releases futuras `self-contained`.
 
 ## Principais funcionalidades
 
@@ -47,7 +62,7 @@ dotnet run --project src/MyAnimeScreen.App/MyAnimeScreen.App.vbproj
 dotnet test MyAnimeScreen.slnx
 ```
 
-## Como gerar build de release
+## Como gerar build de release (framework-dependent)
 
 ```powershell
 dotnet publish src/MyAnimeScreen.App/MyAnimeScreen.App.vbproj `
@@ -57,6 +72,18 @@ dotnet publish src/MyAnimeScreen.App/MyAnimeScreen.App.vbproj `
 
 Saida de publish:
 - `artifacts/publish/MyAnimeScreen/win-x64/`
+
+## Como gerar build de release (self-contained)
+
+```powershell
+dotnet publish src/MyAnimeScreen.App/MyAnimeScreen.App.vbproj `
+  -c Release `
+  /p:PublishProfile=Release-win-x64-selfcontained
+```
+
+Saida de publish:
+- `artifacts/publish/MyAnimeScreen/win-x64/`
+- Inclui runtime do .NET (nao exige instalacao previa do .NET Desktop Runtime)
 
 ## Estrutura do projeto
 
@@ -94,6 +121,18 @@ Executa em `push` na `main` e em `pull_request`:
 - `dotnet restore MyAnimeScreen.slnx`
 - `dotnet build MyAnimeScreen.slnx --configuration Release --no-restore`
 - `dotnet test MyAnimeScreen.slnx --configuration Release --no-build`
+
+## Releases automatizadas
+
+Workflow: `.github/workflows/release.yml`
+
+Ao criar uma tag no formato `v*` (ex.: `v0.2.2`), o GitHub Actions:
+
+- executa build e testes em `Release`
+- publica `win-x64` com perfil `Release-win-x64-selfcontained`
+- gera `.zip` de distribuicao
+- cria/atualiza a GitHub Release e anexa o asset
+- monta notas da release a partir do `CHANGELOG.md`
 
 ## Release notes
 
