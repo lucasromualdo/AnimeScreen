@@ -35,7 +35,6 @@ public sealed class NumericValidationRulesTests
     [InlineData("0")]
     [InlineData("10")]
     [InlineData("7,5")]
-    [InlineData("7.5")]
     public void PersonalScoreValidationRule_AcceptsSupportedFormats(string value)
     {
         var rule = new PersonalScoreValidationRule();
@@ -47,6 +46,7 @@ public sealed class NumericValidationRulesTests
 
     [Theory]
     [InlineData("abc")]
+    [InlineData("7.5")]
     [InlineData("-0.1")]
     [InlineData("10.01")]
     [InlineData("11")]

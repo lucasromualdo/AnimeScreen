@@ -480,8 +480,10 @@ Namespace ViewModels
                     Throw New InvalidOperationException("Repositório local não inicializado.")
                 End If
 
-                Await userAnimeRepository.DeleteByAnimeIdAsync(selected.Id).ConfigureAwait(True)
-                ResetUserEntryDraft()
+                Dim affectedRows = Await userAnimeRepository.DeleteByAnimeIdAsync(selected.Id).ConfigureAwait(True)
+                If affectedRows > 0 Then
+                    ResetUserEntryDraft()
+                End If
                 ScheduleLibraryReload()
             Catch ex As Exception
                 ErrorMessage = $"Falha ao remover da Minha Lista: {ex.Message}"
