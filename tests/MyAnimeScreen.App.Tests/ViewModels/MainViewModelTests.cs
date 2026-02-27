@@ -334,6 +334,64 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task LibrarySortBy_QuandoAlterado_RecarregaBibliotecaSemQuebrarFiltroPorStatus()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var zetaId = await db.SeedAnimeAsync(52001, "Zeta Project");
+        var alphaId = await db.SeedAnimeAsync(52002, "Alpha Start");
+        var betaId = await db.SeedAnimeAsync(52003, "Beta Squad");
+
+        await db.UserAnimeRepository.UpsertAsync(new UserAnime
+        {
+            AnimeId = zetaId,
+            Status = AnimeStatus.Assistindo,
+            CurrentEpisode = 5,
+            PersonalScore = 7.9
+        });
+
+        await db.UserAnimeRepository.UpsertAsync(new UserAnime
+        {
+            AnimeId = alphaId,
+            Status = AnimeStatus.Assistindo,
+            CurrentEpisode = 12,
+            PersonalScore = 9.1
+        });
+
+        await db.UserAnimeRepository.UpsertAsync(new UserAnime
+        {
+            AnimeId = betaId,
+            Status = AnimeStatus.Pausado,
+            CurrentEpisode = 40,
+            PersonalScore = 8.2
+        });
+
+        var vm = new MainViewModel(new FakeAnimeApiClient(), db.AnimeRepository, db.UserAnimeRepository);
+
+        vm.LibraryFilterStatus = null;
+        vm.LibrarySortBy = LibrarySortBy.TitleAsc;
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Equal(3, vm.LibraryItems.Count);
+        Assert.Equal(alphaId, vm.LibraryItems[0].AnimeId);
+        Assert.Equal(betaId, vm.LibraryItems[1].AnimeId);
+        Assert.Equal(zetaId, vm.LibraryItems[2].AnimeId);
+
+        vm.LibraryFilterStatus = AnimeStatus.Assistindo;
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Equal(2, vm.LibraryItems.Count);
+        Assert.Equal(alphaId, vm.LibraryItems[0].AnimeId);
+        Assert.Equal(zetaId, vm.LibraryItems[1].AnimeId);
+
+        vm.LibrarySortBy = LibrarySortBy.CurrentEpisodeDesc;
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Equal(2, vm.LibraryItems.Count);
+        Assert.Equal(alphaId, vm.LibraryItems[0].AnimeId);
+        Assert.Equal(zetaId, vm.LibraryItems[1].AnimeId);
+    }
+
+    [Fact]
     public async Task PersonalScore_QuandoForaDoIntervalo_LancaExcecao()
     {
         await using var db = await TestDatabase.CreateAsync();

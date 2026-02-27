@@ -361,6 +361,8 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="220" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="240" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
@@ -376,13 +378,25 @@
                                   SelectedValuePath="Status"
                                   SelectedValue="{Binding LibraryFilterStatus, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-                        <Button Grid.Column="2"
+                        <TextBlock Grid.Column="2"
+                                   Margin="14,0,8,0"
+                                   VerticalAlignment="Center"
+                                   Text="Ordenar por:" />
+
+                        <ComboBox Grid.Column="3"
+                                  Height="30"
+                                  ItemsSource="{Binding LibrarySortOptions}"
+                                  DisplayMemberPath="Label"
+                                  SelectedValuePath="SortBy"
+                                  SelectedValue="{Binding LibrarySortBy, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <Button Grid.Column="4"
                                 Margin="10,0,0,0"
                                 Padding="12,6"
                                 Command="{Binding RefreshLibraryCommand}"
                                 Content="Atualizar" />
 
-                        <TextBlock Grid.Column="3"
+                        <TextBlock Grid.Column="5"
                                    Margin="10,0,0,0"
                                    VerticalAlignment="Center"
                                    FontWeight="SemiBold"

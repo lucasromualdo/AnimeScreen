@@ -121,8 +121,11 @@ ORDER BY
             End Using
         End Function
 
-        Public Async Function ListLibraryByStatusAsync(status As AnimeStatus?) As Task(Of IReadOnlyList(Of LibraryAnimeSnapshot))
-            Const sql As String =
+        Public Async Function ListLibraryByStatusAsync(
+            status As AnimeStatus?,
+            Optional sortBy As LibrarySortBy = LibrarySortBy.UpdatedAtDesc
+        ) As Task(Of IReadOnlyList(Of LibraryAnimeSnapshot))
+            Const baseSql As String =
 "SELECT
     ua.anime_id AS AnimeId,
     a.title AS Title,
@@ -134,15 +137,19 @@ FROM user_anime ua
 INNER JOIN animes a
     ON a.id = ua.anime_id
 WHERE (@Status IS NULL OR ua.status = @Status)
-ORDER BY
-    ua.is_favorite DESC,
-    ua.updated_at DESC;"
+ORDER BY {0};"
 
             Using connection = Await _connectionFactory.CreateOpenConnectionAsync().ConfigureAwait(False)
                 Dim databaseStatus As String = Nothing
                 If status.HasValue Then
                     databaseStatus = ToDatabaseStatus(status.Value)
                 End If
+
+                Dim sql = String.Format(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    baseSql,
+                    GetLibraryOrderByClause(sortBy)
+                )
 
                 Dim rows = Await connection.QueryAsync(Of LibraryAnimeSnapshotRow)(
                     sql,
@@ -156,6 +163,19 @@ ORDER BY
 
                 Return result
             End Using
+        End Function
+
+        Private Shared Function GetLibraryOrderByClause(sortBy As LibrarySortBy) As String
+            Select Case sortBy
+                Case LibrarySortBy.PersonalScoreDesc
+                    Return "COALESCE(ua.personal_score, -1) DESC, ua.updated_at DESC, a.title COLLATE NOCASE ASC"
+                Case LibrarySortBy.CurrentEpisodeDesc
+                    Return "ua.current_episode DESC, ua.updated_at DESC, a.title COLLATE NOCASE ASC"
+                Case LibrarySortBy.TitleAsc
+                    Return "a.title COLLATE NOCASE ASC, ua.updated_at DESC, ua.is_favorite DESC"
+                Case Else
+                    Return "ua.updated_at DESC, ua.is_favorite DESC, a.title COLLATE NOCASE ASC"
+            End Select
         End Function
 
         Public Async Function DeleteByAnimeIdAsync(animeId As Long) As Task(Of Integer)

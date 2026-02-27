@@ -44,7 +44,7 @@ public sealed class UserAnimeRepositoryTests
     }
 
     [Fact]
-    public async Task ListLibraryByStatusAsync_UsesJoinAndFavoriteOrdering()
+    public async Task ListLibraryByStatusAsync_UsesJoinAndStatusFilter()
     {
         await using var database = await TestDatabase.CreateAsync();
         var repository = new UserAnimeRepository(database.ConnectionFactory);
@@ -68,14 +68,13 @@ public sealed class UserAnimeRepositoryTests
         var rows = await repository.ListLibraryByStatusAsync(AnimeStatus.Assistindo);
 
         Assert.Equal(2, rows.Count);
-        Assert.Equal(secondAnimeId, rows[0].AnimeId);
-        Assert.Equal("Fullmetal Alchemist: Brotherhood", rows[0].Title);
-        Assert.True(rows[0].IsFavorite);
-        Assert.Equal(firstAnimeId, rows[1].AnimeId);
+        Assert.Contains(rows, x => x.AnimeId == firstAnimeId && x.Status == AnimeStatus.Assistindo);
+        Assert.Contains(rows, x => x.AnimeId == secondAnimeId && x.Status == AnimeStatus.Assistindo);
+        Assert.DoesNotContain(rows, x => x.AnimeId == otherStatusAnimeId);
     }
 
     [Fact]
-    public async Task ListLibraryByStatusAsync_WhenStatusIsNull_ReturnsAllStatusesKeepingFavoriteOrdering()
+    public async Task ListLibraryByStatusAsync_WhenSortedByTitle_OrdersAlphabeticallyAcrossStatuses()
     {
         await using var database = await TestDatabase.CreateAsync();
         var repository = new UserAnimeRepository(database.ConnectionFactory);
@@ -98,13 +97,70 @@ public sealed class UserAnimeRepositoryTests
         thirdEntry.IsFavorite = false;
         await repository.UpsertAsync(thirdEntry);
 
-        var rows = await repository.ListLibraryByStatusAsync(null);
+        var rows = await repository.ListLibraryByStatusAsync(null, LibrarySortBy.TitleAsc);
 
         Assert.Equal(3, rows.Count);
-        Assert.Equal(secondAnimeId, rows[0].AnimeId);
-        Assert.True(rows[0].IsFavorite);
-        Assert.Contains(rows, x => x.AnimeId == firstAnimeId && x.Status == AnimeStatus.Assistindo);
-        Assert.Contains(rows, x => x.AnimeId == thirdAnimeId && x.Status == AnimeStatus.Pausado);
+        Assert.Equal(thirdAnimeId, rows[0].AnimeId);
+        Assert.Equal(firstAnimeId, rows[1].AnimeId);
+        Assert.Equal(secondAnimeId, rows[2].AnimeId);
+    }
+
+    [Fact]
+    public async Task ListLibraryByStatusAsync_WhenSortedByPersonalScore_UsesDescendingOrder()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var repository = new UserAnimeRepository(database.ConnectionFactory);
+        var highScoreAnimeId = await database.SeedAnimeAsync(2201, "Death Note");
+        var noScoreAnimeId = await database.SeedAnimeAsync(2202, "Code Geass");
+        var midScoreAnimeId = await database.SeedAnimeAsync(2203, "Psycho-Pass");
+
+        var highScoreEntry = NewEntry(highScoreAnimeId);
+        highScoreEntry.PersonalScore = 9.8;
+        await repository.UpsertAsync(highScoreEntry);
+
+        var noScoreEntry = NewEntry(noScoreAnimeId);
+        noScoreEntry.PersonalScore = null;
+        await repository.UpsertAsync(noScoreEntry);
+
+        var midScoreEntry = NewEntry(midScoreAnimeId);
+        midScoreEntry.PersonalScore = 8.2;
+        await repository.UpsertAsync(midScoreEntry);
+
+        var rows = await repository.ListLibraryByStatusAsync(AnimeStatus.Assistindo, LibrarySortBy.PersonalScoreDesc);
+
+        Assert.Equal(3, rows.Count);
+        Assert.Equal(highScoreAnimeId, rows[0].AnimeId);
+        Assert.Equal(midScoreAnimeId, rows[1].AnimeId);
+        Assert.Equal(noScoreAnimeId, rows[2].AnimeId);
+    }
+
+    [Fact]
+    public async Task ListLibraryByStatusAsync_WhenSortedByCurrentEpisode_UsesDescendingOrder()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var repository = new UserAnimeRepository(database.ConnectionFactory);
+        var highestEpisodeAnimeId = await database.SeedAnimeAsync(2301, "One Piece");
+        var lowerEpisodeAnimeId = await database.SeedAnimeAsync(2302, "Solo Leveling");
+        var middleEpisodeAnimeId = await database.SeedAnimeAsync(2303, "Bleach");
+
+        var highestEpisodeEntry = NewEntry(highestEpisodeAnimeId);
+        highestEpisodeEntry.CurrentEpisode = 90;
+        await repository.UpsertAsync(highestEpisodeEntry);
+
+        var lowerEpisodeEntry = NewEntry(lowerEpisodeAnimeId);
+        lowerEpisodeEntry.CurrentEpisode = 12;
+        await repository.UpsertAsync(lowerEpisodeEntry);
+
+        var middleEpisodeEntry = NewEntry(middleEpisodeAnimeId);
+        middleEpisodeEntry.CurrentEpisode = 45;
+        await repository.UpsertAsync(middleEpisodeEntry);
+
+        var rows = await repository.ListLibraryByStatusAsync(AnimeStatus.Assistindo, LibrarySortBy.CurrentEpisodeDesc);
+
+        Assert.Equal(3, rows.Count);
+        Assert.Equal(highestEpisodeAnimeId, rows[0].AnimeId);
+        Assert.Equal(middleEpisodeAnimeId, rows[1].AnimeId);
+        Assert.Equal(lowerEpisodeAnimeId, rows[2].AnimeId);
     }
 
     [Fact]

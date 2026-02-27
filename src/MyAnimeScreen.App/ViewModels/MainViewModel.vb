@@ -35,6 +35,7 @@ Namespace ViewModels
         Private _isFavorite As Boolean
         Private _userNotes As String = String.Empty
         Private _libraryFilterStatus As AnimeStatus? = AnimeStatus.QueroVer
+        Private _librarySortBy As LibrarySortBy = LibrarySortBy.UpdatedAtDesc
         Private _selectionLoadVersion As Integer
         Private _libraryLoadVersion As Integer
         Private _suppressLibrarySelectionLoad As Boolean
@@ -58,6 +59,7 @@ Namespace ViewModels
             Results = New ObservableCollection(Of Anime)()
             LibraryItems = New ObservableCollection(Of LibraryAnimeItem)()
             LibraryFilterOptions = CreateLibraryFilterOptions()
+            LibrarySortOptions = CreateLibrarySortOptions()
             _searchCommand = New AsyncRelayCommand(AddressOf SearchAsync, AddressOf CanExecuteSearch)
             _saveToMyListCommand = New AsyncRelayCommand(AddressOf SaveToMyListAsync, AddressOf CanExecuteSaveToMyList)
             _removeFromMyListCommand = New AsyncRelayCommand(AddressOf RemoveFromMyListAsync, AddressOf CanExecuteRemoveFromMyList)
@@ -303,6 +305,7 @@ Namespace ViewModels
 
         Public ReadOnly Property LibraryItems As ObservableCollection(Of LibraryAnimeItem)
         Public ReadOnly Property LibraryFilterOptions As IReadOnlyList(Of LibraryFilterOption)
+        Public ReadOnly Property LibrarySortOptions As IReadOnlyList(Of LibrarySortOption)
 
         Public Property SelectedLibraryItem As LibraryAnimeItem
             Get
@@ -334,6 +337,21 @@ Namespace ViewModels
                 End If
 
                 _libraryFilterStatus = value
+                OnPropertyChanged()
+                ScheduleLibraryReload()
+            End Set
+        End Property
+
+        Public Property LibrarySortBy As LibrarySortBy
+            Get
+                Return _librarySortBy
+            End Get
+            Set(value As LibrarySortBy)
+                If _librarySortBy = value Then
+                    Return
+                End If
+
+                _librarySortBy = value
                 OnPropertyChanged()
                 ScheduleLibraryReload()
             End Set
@@ -590,7 +608,7 @@ Namespace ViewModels
                     Return
                 End If
 
-                Dim userItems = Await userAnimeRepository.ListLibraryByStatusAsync(LibraryFilterStatus).ConfigureAwait(True)
+                Dim userItems = Await userAnimeRepository.ListLibraryByStatusAsync(LibraryFilterStatus, LibrarySortBy).ConfigureAwait(True)
                 If requestedVersion <> _libraryLoadVersion Then
                     Return
                 End If
@@ -755,6 +773,27 @@ Namespace ViewModels
             }
         End Function
 
+        Private Shared Function CreateLibrarySortOptions() As IReadOnlyList(Of LibrarySortOption)
+            Return New List(Of LibrarySortOption) From {
+                New LibrarySortOption With {
+                    .Label = "Atualizado recentemente",
+                    .SortBy = LibrarySortBy.UpdatedAtDesc
+                },
+                New LibrarySortOption With {
+                    .Label = "Maior nota pessoal",
+                    .SortBy = LibrarySortBy.PersonalScoreDesc
+                },
+                New LibrarySortOption With {
+                    .Label = "Maior episodio atual",
+                    .SortBy = LibrarySortBy.CurrentEpisodeDesc
+                },
+                New LibrarySortOption With {
+                    .Label = "Titulo (A-Z)",
+                    .SortBy = LibrarySortBy.TitleAsc
+                }
+            }
+        End Function
+
         Private Sub OnPropertyChanged(<CallerMemberName> Optional propertyName As String = Nothing)
             RaiseEvent PropertyChanged(Me, New PropertyChangedEventArgs(propertyName))
         End Sub
@@ -772,5 +811,10 @@ Namespace ViewModels
     Public Class LibraryFilterOption
         Public Property Label As String = String.Empty
         Public Property Status As AnimeStatus?
+    End Class
+
+    Public Class LibrarySortOption
+        Public Property Label As String = String.Empty
+        Public Property SortBy As LibrarySortBy
     End Class
 End Namespace
