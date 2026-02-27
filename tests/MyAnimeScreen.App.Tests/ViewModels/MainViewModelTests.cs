@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using Microsoft.Data.Sqlite;
 using MyAnimeScreen.App.Models;
 using MyAnimeScreen.App.Services.Api;
@@ -334,6 +335,49 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task LibraryFilterGenre_QuandoSelecionado_FiltraBibliotecaPorGenero()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var actionAnimeId = await db.SeedAnimeWithGenresAsync(53001, "Demon Slayer", "Action", "Fantasy");
+        var dramaAnimeId = await db.SeedAnimeWithGenresAsync(53002, "Violet Evergarden", "Drama");
+
+        await db.UserAnimeRepository.UpsertAsync(new UserAnime
+        {
+            AnimeId = actionAnimeId,
+            Status = AnimeStatus.Assistindo,
+            IsFavorite = true
+        });
+
+        await db.UserAnimeRepository.UpsertAsync(new UserAnime
+        {
+            AnimeId = dramaAnimeId,
+            Status = AnimeStatus.Assistindo,
+            IsFavorite = false
+        });
+
+        var vm = new MainViewModel(new FakeAnimeApiClient(), db.AnimeRepository, db.UserAnimeRepository)
+        {
+            LibraryFilterStatus = AnimeStatus.Assistindo
+        };
+
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Contains(vm.LibraryGenreOptions, x => x.Label == "Action");
+        Assert.Contains(vm.LibraryGenreOptions, x => x.Label == "Drama");
+
+        vm.LibraryFilterGenre = "Action";
+        await WaitForBackgroundWorkAsync(vm);
+
+        var filtered = Assert.Single(vm.LibraryItems);
+        Assert.Equal(actionAnimeId, filtered.AnimeId);
+
+        vm.LibraryFilterGenre = null;
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Equal(2, vm.LibraryItems.Count);
+    }
+
+    [Fact]
     public async Task LibrarySortBy_QuandoAlterado_RecarregaBibliotecaSemQuebrarFiltroPorStatus()
     {
         await using var db = await TestDatabase.CreateAsync();
@@ -547,6 +591,18 @@ public sealed class MainViewModelTests
                 MalId = malId,
                 Title = title
             });
+        }
+
+        public async Task<long> SeedAnimeWithGenresAsync(int malId, string title, params string[] genres)
+        {
+            var anime = new Anime
+            {
+                MalId = malId,
+                Title = title,
+                Genres = genres.Select(x => new Genre { Name = x }).ToList()
+            };
+
+            return await AnimeRepository.UpsertAsync(anime);
         }
 
         public ValueTask DisposeAsync()

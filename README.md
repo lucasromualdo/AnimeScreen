@@ -6,9 +6,10 @@ Aplicativo desktop em VB.NET (WPF) para buscar animes na Jikan API, salvar dados
 
 - Milestone `v0.2.1` concluido e fechado no GitHub (bugs `#11` e `#12`).
 - Milestones anteriores concluidas: `v0.2.0`, `v0.1.1`.
-- Backlog atual (`v0.3.0`): expansoes abertas `#6`, `#9`, `#10`.
+- Backlog atual (`v0.3.0`): expansoes abertas `#9`, `#10`.
 - Melhoria de fluxo aberta: automacao adicional do kanban (`#15`).
-- Proxima prioridade sugerida: implementar `#6` (persistir e filtrar por generos).
+- Entrega recente: `#6` concluida (persistencia e filtro por generos na Biblioteca Local).
+- Proxima prioridade sugerida: implementar `#9` (paginacao/carregar mais resultados).
 
 ## Download (Windows x64)
 
@@ -37,7 +38,7 @@ Observacao:
   - nota pessoal
   - favorito
   - notas
-- Biblioteca local com filtro por status (`Todos`) e ordenacao por atualizado, nota pessoal, episodio atual e titulo.
+- Biblioteca local com filtro por status (`Todos`), genero e ordenacao por atualizado, nota pessoal, episodio atual e titulo.
 - Validacoes de entrada para campos numericos.
 - Pipeline CI (build + testes) no GitHub Actions.
 

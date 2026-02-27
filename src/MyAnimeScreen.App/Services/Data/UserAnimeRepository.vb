@@ -123,7 +123,8 @@ ORDER BY
 
         Public Async Function ListLibraryByStatusAsync(
             status As AnimeStatus?,
-            Optional sortBy As LibrarySortBy = LibrarySortBy.UpdatedAtDesc
+            Optional sortBy As LibrarySortBy = LibrarySortBy.UpdatedAtDesc,
+            Optional genreName As String = Nothing
         ) As Task(Of IReadOnlyList(Of LibraryAnimeSnapshot))
             Const baseSql As String =
 "SELECT
@@ -137,6 +138,17 @@ FROM user_anime ua
 INNER JOIN animes a
     ON a.id = ua.anime_id
 WHERE (@Status IS NULL OR ua.status = @Status)
+  AND (
+      @GenreName IS NULL
+      OR EXISTS (
+          SELECT 1
+          FROM anime_genres ag
+          INNER JOIN genres g
+              ON g.id = ag.genre_id
+          WHERE ag.anime_id = ua.anime_id
+            AND g.name = @GenreName COLLATE NOCASE
+      )
+  )
 ORDER BY {0};"
 
             Using connection = Await _connectionFactory.CreateOpenConnectionAsync().ConfigureAwait(False)
@@ -151,9 +163,14 @@ ORDER BY {0};"
                     GetLibraryOrderByClause(sortBy)
                 )
 
+                Dim normalizedGenreName = NormalizeGenreName(genreName)
+
                 Dim rows = Await connection.QueryAsync(Of LibraryAnimeSnapshotRow)(
                     sql,
-                    New With {.Status = databaseStatus}
+                    New With {
+                        .Status = databaseStatus,
+                        .GenreName = normalizedGenreName
+                    }
                 ).ConfigureAwait(False)
 
                 Dim result = New List(Of LibraryAnimeSnapshot)
@@ -162,6 +179,24 @@ ORDER BY {0};"
                 Next
 
                 Return result
+            End Using
+        End Function
+
+        Public Async Function ListLibraryGenresAsync() As Task(Of IReadOnlyList(Of Genre))
+            Const sql As String =
+"SELECT DISTINCT
+    g.id AS Id,
+    g.name AS Name
+FROM user_anime ua
+INNER JOIN anime_genres ag
+    ON ag.anime_id = ua.anime_id
+INNER JOIN genres g
+    ON g.id = ag.genre_id
+ORDER BY g.name COLLATE NOCASE;"
+
+            Using connection = Await _connectionFactory.CreateOpenConnectionAsync().ConfigureAwait(False)
+                Dim rows = Await connection.QueryAsync(Of Genre)(sql).ConfigureAwait(False)
+                Return rows.AsList()
             End Using
         End Function
 
@@ -176,6 +211,14 @@ ORDER BY {0};"
                 Case Else
                     Return "ua.updated_at DESC, ua.is_favorite DESC, a.title COLLATE NOCASE ASC"
             End Select
+        End Function
+
+        Private Shared Function NormalizeGenreName(value As String) As String
+            If String.IsNullOrWhiteSpace(value) Then
+                Return Nothing
+            End If
+
+            Return value.Trim()
         End Function
 
         Public Async Function DeleteByAnimeIdAsync(animeId As Long) As Task(Of Integer)

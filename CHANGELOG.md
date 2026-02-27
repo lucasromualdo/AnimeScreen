@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Advanced sorting for Local Library by updated date, personal score, current episode, and title, with UI selector and test coverage (`#8`).
+- Genre persistence from Jikan data (`genres` + `anime_genres`) and Local Library genre filter in UI, with repository/ViewModel test coverage (`#6`).
 
 ## [0.2.1] - 2026-02-25
 

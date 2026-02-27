@@ -35,6 +35,7 @@ Namespace ViewModels
         Private _isFavorite As Boolean
         Private _userNotes As String = String.Empty
         Private _libraryFilterStatus As AnimeStatus? = AnimeStatus.QueroVer
+        Private _libraryFilterGenre As String
         Private _librarySortBy As LibrarySortBy = LibrarySortBy.UpdatedAtDesc
         Private _selectionLoadVersion As Integer
         Private _libraryLoadVersion As Integer
@@ -59,6 +60,7 @@ Namespace ViewModels
             Results = New ObservableCollection(Of Anime)()
             LibraryItems = New ObservableCollection(Of LibraryAnimeItem)()
             LibraryFilterOptions = CreateLibraryFilterOptions()
+            LibraryGenreOptions = New ObservableCollection(Of LibraryGenreOption)(CreateDefaultLibraryGenreOptions())
             LibrarySortOptions = CreateLibrarySortOptions()
             _searchCommand = New AsyncRelayCommand(AddressOf SearchAsync, AddressOf CanExecuteSearch)
             _saveToMyListCommand = New AsyncRelayCommand(AddressOf SaveToMyListAsync, AddressOf CanExecuteSaveToMyList)
@@ -305,6 +307,7 @@ Namespace ViewModels
 
         Public ReadOnly Property LibraryItems As ObservableCollection(Of LibraryAnimeItem)
         Public ReadOnly Property LibraryFilterOptions As IReadOnlyList(Of LibraryFilterOption)
+        Public ReadOnly Property LibraryGenreOptions As ObservableCollection(Of LibraryGenreOption)
         Public ReadOnly Property LibrarySortOptions As IReadOnlyList(Of LibrarySortOption)
 
         Public Property SelectedLibraryItem As LibraryAnimeItem
@@ -337,6 +340,22 @@ Namespace ViewModels
                 End If
 
                 _libraryFilterStatus = value
+                OnPropertyChanged()
+                ScheduleLibraryReload()
+            End Set
+        End Property
+
+        Public Property LibraryFilterGenre As String
+            Get
+                Return _libraryFilterGenre
+            End Get
+            Set(value As String)
+                Dim normalizedValue = NormalizeLibraryGenreValue(value)
+                If String.Equals(_libraryFilterGenre, normalizedValue, StringComparison.OrdinalIgnoreCase) Then
+                    Return
+                End If
+
+                _libraryFilterGenre = normalizedValue
                 OnPropertyChanged()
                 ScheduleLibraryReload()
             End Set
@@ -608,10 +627,21 @@ Namespace ViewModels
                     Return
                 End If
 
-                Dim userItems = Await userAnimeRepository.ListLibraryByStatusAsync(LibraryFilterStatus, LibrarySortBy).ConfigureAwait(True)
+                Dim userItems = Await userAnimeRepository.ListLibraryByStatusAsync(
+                    LibraryFilterStatus,
+                    LibrarySortBy,
+                    LibraryFilterGenre
+                ).ConfigureAwait(True)
                 If requestedVersion <> _libraryLoadVersion Then
                     Return
                 End If
+
+                Dim genres = Await userAnimeRepository.ListLibraryGenresAsync().ConfigureAwait(True)
+                If requestedVersion <> _libraryLoadVersion Then
+                    Return
+                End If
+
+                UpdateLibraryGenreOptions(genres)
 
                 Dim libraryRows = New List(Of LibraryAnimeItem)
                 For Each userItem In userItems
@@ -645,6 +675,15 @@ Namespace ViewModels
                 End If
             End Try
         End Function
+
+        Private Sub UpdateLibraryGenreOptions(genres As IReadOnlyList(Of Genre))
+            Dim options = CreateLibraryGenreOptions(genres, _libraryFilterGenre)
+
+            LibraryGenreOptions.Clear()
+            For Each optionItem In options
+                LibraryGenreOptions.Add(optionItem)
+            Next
+        End Sub
 
         Private Shared Async Function PersistSearchResultsAsync(items As IEnumerable(Of Anime), animeRepository As AnimeRepository) As Task(Of Integer)
             Dim failures = 0
@@ -794,6 +833,61 @@ Namespace ViewModels
             }
         End Function
 
+        Private Shared Function CreateDefaultLibraryGenreOptions() As IReadOnlyList(Of LibraryGenreOption)
+            Return New List(Of LibraryGenreOption) From {
+                New LibraryGenreOption With {
+                    .Label = "Todos",
+                    .GenreName = Nothing
+                }
+            }
+        End Function
+
+        Private Shared Function CreateLibraryGenreOptions(
+            genres As IReadOnlyList(Of Genre),
+            selectedGenre As String
+        ) As IReadOnlyList(Of LibraryGenreOption)
+            Dim options = New List(Of LibraryGenreOption)(CreateDefaultLibraryGenreOptions())
+            Dim normalizedSelected = NormalizeLibraryGenreValue(selectedGenre)
+            Dim seenNames = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+
+            If genres IsNot Nothing Then
+                For Each genre In genres
+                    If genre Is Nothing Then
+                        Continue For
+                    End If
+
+                    Dim name = NormalizeLibraryGenreValue(genre.Name)
+                    If String.IsNullOrWhiteSpace(name) Then
+                        Continue For
+                    End If
+
+                    If seenNames.Add(name) Then
+                        options.Add(New LibraryGenreOption With {
+                            .Label = name,
+                            .GenreName = name
+                        })
+                    End If
+                Next
+            End If
+
+            If Not String.IsNullOrWhiteSpace(normalizedSelected) AndAlso seenNames.Add(normalizedSelected) Then
+                options.Add(New LibraryGenreOption With {
+                    .Label = normalizedSelected,
+                    .GenreName = normalizedSelected
+                })
+            End If
+
+            Return options
+        End Function
+
+        Private Shared Function NormalizeLibraryGenreValue(value As String) As String
+            If String.IsNullOrWhiteSpace(value) Then
+                Return Nothing
+            End If
+
+            Return value.Trim()
+        End Function
+
         Private Sub OnPropertyChanged(<CallerMemberName> Optional propertyName As String = Nothing)
             RaiseEvent PropertyChanged(Me, New PropertyChangedEventArgs(propertyName))
         End Sub
@@ -816,5 +910,10 @@ Namespace ViewModels
     Public Class LibrarySortOption
         Public Property Label As String = String.Empty
         Public Property SortBy As LibrarySortBy
+    End Class
+
+    Public Class LibraryGenreOption
+        Public Property Label As String = String.Empty
+        Public Property GenreName As String
     End Class
 End Namespace

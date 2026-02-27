@@ -1,3 +1,5 @@
+Imports System.Collections.Generic
+
 Namespace Models
     Public Class Anime
         Public Property Id As Long
@@ -10,6 +12,7 @@ Namespace Models
         Public Property Score As Double?
         Public Property Year As Integer?
         Public Property Season As String
+        Public Property Genres As IReadOnlyList(Of Genre) = Array.Empty(Of Genre)()
         Public Property CreatedAt As DateTime?
         Public Property UpdatedAt As DateTime?
     End Class

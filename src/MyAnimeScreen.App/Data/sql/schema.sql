@@ -44,3 +44,4 @@ CREATE TABLE IF NOT EXISTS user_anime (
 
 CREATE INDEX IF NOT EXISTS idx_user_anime_status ON user_anime(status);
 CREATE INDEX IF NOT EXISTS idx_animes_title ON animes(title);
+CREATE INDEX IF NOT EXISTS idx_anime_genres_genre_id ON anime_genres(genre_id);

@@ -164,6 +164,53 @@ public sealed class UserAnimeRepositoryTests
     }
 
     [Fact]
+    public async Task ListLibraryByStatusAsync_WhenGenreFilterIsProvided_ReturnsOnlyMatchingRows()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var repository = new UserAnimeRepository(database.ConnectionFactory);
+        var actionAnimeId = await database.SeedAnimeAsync(2401, "Jujutsu Kaisen");
+        var dramaAnimeId = await database.SeedAnimeAsync(2402, "March Comes in Like a Lion");
+
+        await database.AddGenreToAnimeAsync(actionAnimeId, "Action");
+        await database.AddGenreToAnimeAsync(dramaAnimeId, "Drama");
+
+        await repository.UpsertAsync(NewEntry(actionAnimeId));
+        await repository.UpsertAsync(NewEntry(dramaAnimeId));
+
+        var rows = await repository.ListLibraryByStatusAsync(
+            AnimeStatus.Assistindo,
+            LibrarySortBy.UpdatedAtDesc,
+            "Action");
+
+        var row = Assert.Single(rows);
+        Assert.Equal(actionAnimeId, row.AnimeId);
+    }
+
+    [Fact]
+    public async Task ListLibraryGenresAsync_ReturnsDistinctGenresFromUserLibrary()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var repository = new UserAnimeRepository(database.ConnectionFactory);
+        var firstAnimeId = await database.SeedAnimeAsync(2501, "Attack on Titan");
+        var secondAnimeId = await database.SeedAnimeAsync(2502, "Your Lie in April");
+        var unsavedAnimeId = await database.SeedAnimeAsync(2503, "Kaguya-sama");
+
+        await database.AddGenreToAnimeAsync(firstAnimeId, "Action");
+        await database.AddGenreToAnimeAsync(firstAnimeId, "Drama");
+        await database.AddGenreToAnimeAsync(secondAnimeId, "Drama");
+        await database.AddGenreToAnimeAsync(unsavedAnimeId, "Romance");
+
+        await repository.UpsertAsync(NewEntry(firstAnimeId));
+        await repository.UpsertAsync(NewEntry(secondAnimeId));
+
+        var genres = await repository.ListLibraryGenresAsync();
+
+        Assert.Equal(2, genres.Count);
+        Assert.Equal("Action", genres[0].Name);
+        Assert.Equal("Drama", genres[1].Name);
+    }
+
+    [Fact]
     public async Task DeleteByAnimeIdAsync_RemovesEntry()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -312,6 +359,46 @@ public sealed class UserAnimeRepositoryTests
             insertCommand.Parameters.Add(statusParameter);
 
             await insertCommand.ExecuteNonQueryAsync();
+        }
+
+        public async Task AddGenreToAnimeAsync(long animeId, string genreName)
+        {
+            using var connection = await ConnectionFactory.CreateOpenConnectionAsync();
+
+            using (var insertGenreCommand = connection.CreateCommand())
+            {
+                insertGenreCommand.CommandText =
+                    @"INSERT INTO genres (name)
+                      VALUES (@Name)
+                      ON CONFLICT(name) DO NOTHING;";
+
+                var genreNameParameter = insertGenreCommand.CreateParameter();
+                genreNameParameter.ParameterName = "@Name";
+                genreNameParameter.Value = genreName;
+                insertGenreCommand.Parameters.Add(genreNameParameter);
+
+                await insertGenreCommand.ExecuteNonQueryAsync();
+            }
+
+            using var linkCommand = connection.CreateCommand();
+            linkCommand.CommandText =
+                @"INSERT INTO anime_genres (anime_id, genre_id)
+                  SELECT @AnimeId, id
+                  FROM genres
+                  WHERE name = @Name
+                  ON CONFLICT(anime_id, genre_id) DO NOTHING;";
+
+            var animeIdParameter = linkCommand.CreateParameter();
+            animeIdParameter.ParameterName = "@AnimeId";
+            animeIdParameter.Value = animeId;
+            linkCommand.Parameters.Add(animeIdParameter);
+
+            var nameParameter = linkCommand.CreateParameter();
+            nameParameter.ParameterName = "@Name";
+            nameParameter.Value = genreName;
+            linkCommand.Parameters.Add(nameParameter);
+
+            await linkCommand.ExecuteNonQueryAsync();
         }
 
         public ValueTask DisposeAsync()

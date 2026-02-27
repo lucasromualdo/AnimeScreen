@@ -1,3 +1,4 @@
+Imports System.Collections.Generic
 Imports System.Net
 Imports System.Net.Http
 Imports System.Text.Json
@@ -227,8 +228,43 @@ Namespace Services.Api
                 .EpisodesTotal = source.Episodes,
                 .Score = source.Score,
                 .Year = source.Year,
-                .Season = source.Season
+                .Season = source.Season,
+                .Genres = MapGenres(source.Genres)
             }
+        End Function
+
+        Private Shared Function MapGenres(source As IReadOnlyList(Of JikanGenreData)) As IReadOnlyList(Of Genre)
+            If source Is Nothing OrElse source.Count = 0 Then
+                Return Array.Empty(Of Genre)()
+            End If
+
+            Dim seenNames = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+            Dim mapped = New List(Of Genre)
+
+            For Each item In source
+                If item Is Nothing Then
+                    Continue For
+                End If
+
+                Dim name = NormalizeGenreName(item.Name)
+                If String.IsNullOrWhiteSpace(name) Then
+                    Continue For
+                End If
+
+                If seenNames.Add(name) Then
+                    mapped.Add(New Genre With {.Name = name})
+                End If
+            Next
+
+            Return mapped
+        End Function
+
+        Private Shared Function NormalizeGenreName(value As String) As String
+            If String.IsNullOrWhiteSpace(value) Then
+                Return String.Empty
+            End If
+
+            Return value.Trim()
         End Function
 
         Private Class JikanAnimeListResponse
@@ -268,6 +304,9 @@ Namespace Services.Api
 
             <JsonPropertyName("images")>
             Public Property Images As JikanImages
+
+            <JsonPropertyName("genres")>
+            Public Property Genres As List(Of JikanGenreData)
         End Class
 
         Private Class JikanImages
@@ -281,6 +320,11 @@ Namespace Services.Api
         Private Class JikanImageSet
             <JsonPropertyName("image_url")>
             Public Property ImageUrl As String
+        End Class
+
+        Private Class JikanGenreData
+            <JsonPropertyName("name")>
+            Public Property Name As String
         End Class
     End Class
 End Namespace
