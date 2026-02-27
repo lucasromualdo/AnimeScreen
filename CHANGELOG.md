@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Advanced sorting for Local Library by updated date, personal score, current episode, and title, with UI selector and test coverage (`#8`).
+
 ## [0.2.1] - 2026-02-25
 
 ### Fixed
