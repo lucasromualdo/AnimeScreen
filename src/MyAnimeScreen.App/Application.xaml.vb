@@ -26,6 +26,7 @@ Class Application
             Dim animeApiClient = New JikanApiClient()
             Dim animeRepository = New AnimeRepository(connectionFactory)
             Dim userAnimeRepository = New UserAnimeRepository(connectionFactory)
+            Dim libraryTransferService = New LibraryTransferService(connectionFactory)
 
             startupStep = "inicializar schema do banco local"
             Await DatabaseInitializer.EnsureCreatedAsync(
@@ -34,7 +35,7 @@ Class Application
             ).ConfigureAwait(True)
 
             startupStep = "inicializar janela principal"
-            Dim mainViewModel = New MainViewModel(animeApiClient, animeRepository, userAnimeRepository)
+            Dim mainViewModel = New MainViewModel(animeApiClient, animeRepository, userAnimeRepository, libraryTransferService)
             Dim mainWindow = New MainWindow(mainViewModel)
             MainWindow = mainWindow
             mainWindow.Show()

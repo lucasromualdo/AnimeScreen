@@ -1,9 +1,11 @@
 Imports System.Collections.ObjectModel
 Imports System.Collections.Generic
 Imports System.ComponentModel
+Imports System.IO
 Imports System.Runtime.CompilerServices
 Imports System.Threading.Tasks
 Imports System.Windows.Input
+Imports Microsoft.Win32
 Imports MyAnimeScreen.App.Commands
 Imports MyAnimeScreen.App.Models
 Imports MyAnimeScreen.App.Services.Api
@@ -18,11 +20,15 @@ Namespace ViewModels
         Private ReadOnly _loadMoreCommand As AsyncRelayCommand
         Private ReadOnly _saveToMyListCommand As AsyncRelayCommand
         Private ReadOnly _removeFromMyListCommand As AsyncRelayCommand
+        Private ReadOnly _exportLibraryJsonCommand As AsyncRelayCommand
+        Private ReadOnly _exportLibraryCsvCommand As AsyncRelayCommand
+        Private ReadOnly _importLibraryCommand As AsyncRelayCommand
         Private ReadOnly _openLibraryItemCommand As RelayCommand
         Private ReadOnly _refreshLibraryCommand As RelayCommand
         Private ReadOnly _animeApiClient As IAnimeApiClient
         Private ReadOnly _animeRepository As AnimeRepository
         Private ReadOnly _userAnimeRepository As UserAnimeRepository
+        Private ReadOnly _libraryTransferService As LibraryTransferService
         Private _query As String = String.Empty
         Private _selectedAnime As Anime
         Private _selectedLibraryItem As LibraryAnimeItem
@@ -30,8 +36,11 @@ Namespace ViewModels
         Private _isLoadingMore As Boolean
         Private _isSavingToMyList As Boolean
         Private _isRemovingFromMyList As Boolean
+        Private _isExportingLibrary As Boolean
+        Private _isImportingLibrary As Boolean
         Private _isLibraryLoading As Boolean
         Private _errorMessage As String = String.Empty
+        Private _libraryTransferSummary As String = String.Empty
         Private _currentPage As Integer
         Private _hasMore As Boolean
         Private _userStatus As AnimeStatus = AnimeStatus.QueroVer
@@ -47,7 +56,12 @@ Namespace ViewModels
         Private _suppressLibrarySelectionLoad As Boolean
         Private _activeSearchTerm As String = String.Empty
 
-        Public Sub New(animeApiClient As IAnimeApiClient, animeRepository As AnimeRepository, userAnimeRepository As UserAnimeRepository)
+        Public Sub New(
+            animeApiClient As IAnimeApiClient,
+            animeRepository As AnimeRepository,
+            userAnimeRepository As UserAnimeRepository,
+            Optional libraryTransferService As LibraryTransferService = Nothing
+        )
             If animeApiClient Is Nothing Then
                 Throw New ArgumentNullException(NameOf(animeApiClient))
             End If
@@ -63,6 +77,7 @@ Namespace ViewModels
             _animeApiClient = animeApiClient
             _animeRepository = animeRepository
             _userAnimeRepository = userAnimeRepository
+            _libraryTransferService = libraryTransferService
             Results = New ObservableCollection(Of Anime)()
             LibraryItems = New ObservableCollection(Of LibraryAnimeItem)()
             LibraryFilterOptions = CreateLibraryFilterOptions()
@@ -72,6 +87,9 @@ Namespace ViewModels
             _loadMoreCommand = New AsyncRelayCommand(AddressOf LoadMoreAsync, AddressOf CanExecuteLoadMore)
             _saveToMyListCommand = New AsyncRelayCommand(AddressOf SaveToMyListAsync, AddressOf CanExecuteSaveToMyList)
             _removeFromMyListCommand = New AsyncRelayCommand(AddressOf RemoveFromMyListAsync, AddressOf CanExecuteRemoveFromMyList)
+            _exportLibraryJsonCommand = New AsyncRelayCommand(AddressOf ExportLibraryJsonAsync, AddressOf CanExecuteLibraryTransfer)
+            _exportLibraryCsvCommand = New AsyncRelayCommand(AddressOf ExportLibraryCsvAsync, AddressOf CanExecuteLibraryTransfer)
+            _importLibraryCommand = New AsyncRelayCommand(AddressOf ImportLibraryAsync, AddressOf CanExecuteLibraryTransfer)
             _openLibraryItemCommand = New RelayCommand(AddressOf ExecuteOpenLibraryItem, AddressOf CanExecuteOpenLibraryItem)
             _refreshLibraryCommand = New RelayCommand(AddressOf ExecuteRefreshLibrary, AddressOf CanExecuteRefreshLibrary)
             ScheduleLibraryReload()
@@ -182,9 +200,44 @@ Namespace ViewModels
             End Set
         End Property
 
+        Public Property IsExportingLibrary As Boolean
+            Get
+                Return _isExportingLibrary
+            End Get
+            Private Set(value As Boolean)
+                If _isExportingLibrary = value Then
+                    Return
+                End If
+
+                _isExportingLibrary = value
+                OnPropertyChanged()
+                NotifyBusyStateChanged()
+            End Set
+        End Property
+
+        Public Property IsImportingLibrary As Boolean
+            Get
+                Return _isImportingLibrary
+            End Get
+            Private Set(value As Boolean)
+                If _isImportingLibrary = value Then
+                    Return
+                End If
+
+                _isImportingLibrary = value
+                OnPropertyChanged()
+                NotifyBusyStateChanged()
+            End Set
+        End Property
+
         Public ReadOnly Property IsBusy As Boolean
             Get
-                Return IsSearching OrElse IsLoadingMore OrElse IsSavingToMyList OrElse IsRemovingFromMyList
+                Return IsSearching OrElse
+                    IsLoadingMore OrElse
+                    IsSavingToMyList OrElse
+                    IsRemovingFromMyList OrElse
+                    IsExportingLibrary OrElse
+                    IsImportingLibrary
             End Get
         End Property
 
@@ -213,6 +266,28 @@ Namespace ViewModels
         Public ReadOnly Property HasError As Boolean
             Get
                 Return Not String.IsNullOrWhiteSpace(ErrorMessage)
+            End Get
+        End Property
+
+        Public Property LibraryTransferSummary As String
+            Get
+                Return _libraryTransferSummary
+            End Get
+            Set(value As String)
+                Dim normalizedValue = If(value, String.Empty)
+                If String.Equals(_libraryTransferSummary, normalizedValue, StringComparison.Ordinal) Then
+                    Return
+                End If
+
+                _libraryTransferSummary = normalizedValue
+                OnPropertyChanged()
+                OnPropertyChanged(NameOf(HasLibraryTransferSummary))
+            End Set
+        End Property
+
+        Public ReadOnly Property HasLibraryTransferSummary As Boolean
+            Get
+                Return Not String.IsNullOrWhiteSpace(LibraryTransferSummary)
             End Get
         End Property
 
@@ -442,6 +517,24 @@ Namespace ViewModels
             End Get
         End Property
 
+        Public ReadOnly Property ExportLibraryJsonCommand As ICommand
+            Get
+                Return _exportLibraryJsonCommand
+            End Get
+        End Property
+
+        Public ReadOnly Property ExportLibraryCsvCommand As ICommand
+            Get
+                Return _exportLibraryCsvCommand
+            End Get
+        End Property
+
+        Public ReadOnly Property ImportLibraryCommand As ICommand
+            Get
+                Return _importLibraryCommand
+            End Get
+        End Property
+
         Private Sub NotifyBusyStateChanged()
             OnPropertyChanged(NameOf(IsBusy))
             OnPropertyChanged(NameOf(IsLoading))
@@ -449,6 +542,9 @@ Namespace ViewModels
             _loadMoreCommand.RaiseCanExecuteChanged()
             _saveToMyListCommand.RaiseCanExecuteChanged()
             _removeFromMyListCommand.RaiseCanExecuteChanged()
+            _exportLibraryJsonCommand.RaiseCanExecuteChanged()
+            _exportLibraryCsvCommand.RaiseCanExecuteChanged()
+            _importLibraryCommand.RaiseCanExecuteChanged()
             _openLibraryItemCommand.RaiseCanExecuteChanged()
         End Sub
 
@@ -492,6 +588,10 @@ Namespace ViewModels
             Return Not IsLibraryLoading
         End Function
 
+        Private Function CanExecuteLibraryTransfer(parameter As Object) As Boolean
+            Return (Not IsBusy) AndAlso _libraryTransferService IsNot Nothing
+        End Function
+
         Private Sub ExecuteOpenLibraryItem(parameter As Object)
             Dim item = TryCast(parameter, LibraryAnimeItem)
             If item Is Nothing Then
@@ -509,6 +609,106 @@ Namespace ViewModels
         Private Sub ExecuteRefreshLibrary(parameter As Object)
             ScheduleLibraryReload()
         End Sub
+
+        Private Async Function ExportLibraryJsonAsync() As Task
+            Dim transferService = _libraryTransferService
+            If transferService Is Nothing Then
+                Return
+            End If
+
+            Dim dialog = New SaveFileDialog With {
+                .Title = "Exportar Biblioteca (JSON)",
+                .Filter = "JSON (*.json)|*.json",
+                .DefaultExt = ".json",
+                .AddExtension = True,
+                .FileName = $"myanimescreen-library-{DateTime.Now:yyyyMMdd-HHmmss}.json"
+            }
+
+            Dim approved = dialog.ShowDialog().GetValueOrDefault(False)
+            If Not approved Then
+                Return
+            End If
+
+            IsExportingLibrary = True
+            ErrorMessage = String.Empty
+            LibraryTransferSummary = String.Empty
+
+            Try
+                Dim totalRows = Await transferService.ExportAsJsonAsync(dialog.FileName).ConfigureAwait(True)
+                LibraryTransferSummary = $"Exportacao JSON concluida com {totalRows} item(ns)."
+            Catch ex As Exception
+                ErrorMessage = $"Falha ao exportar biblioteca para JSON: {ex.Message}"
+            Finally
+                IsExportingLibrary = False
+            End Try
+        End Function
+
+        Private Async Function ExportLibraryCsvAsync() As Task
+            Dim transferService = _libraryTransferService
+            If transferService Is Nothing Then
+                Return
+            End If
+
+            Dim dialog = New SaveFileDialog With {
+                .Title = "Exportar Biblioteca (CSV)",
+                .Filter = "CSV (*.csv)|*.csv",
+                .DefaultExt = ".csv",
+                .AddExtension = True,
+                .FileName = $"myanimescreen-library-{DateTime.Now:yyyyMMdd-HHmmss}.csv"
+            }
+
+            Dim approved = dialog.ShowDialog().GetValueOrDefault(False)
+            If Not approved Then
+                Return
+            End If
+
+            IsExportingLibrary = True
+            ErrorMessage = String.Empty
+            LibraryTransferSummary = String.Empty
+
+            Try
+                Dim totalRows = Await transferService.ExportAsCsvAsync(dialog.FileName).ConfigureAwait(True)
+                LibraryTransferSummary = $"Exportacao CSV concluida com {totalRows} item(ns)."
+            Catch ex As Exception
+                ErrorMessage = $"Falha ao exportar biblioteca para CSV: {ex.Message}"
+            Finally
+                IsExportingLibrary = False
+            End Try
+        End Function
+
+        Private Async Function ImportLibraryAsync() As Task
+            Dim transferService = _libraryTransferService
+            If transferService Is Nothing Then
+                Return
+            End If
+
+            Dim dialog = New OpenFileDialog With {
+                .Title = "Importar Biblioteca (JSON/CSV)",
+                .Filter = "Arquivos de biblioteca (*.json;*.csv)|*.json;*.csv|JSON (*.json)|*.json|CSV (*.csv)|*.csv"
+            }
+
+            Dim approved = dialog.ShowDialog().GetValueOrDefault(False)
+            If Not approved Then
+                Return
+            End If
+
+            IsImportingLibrary = True
+            ErrorMessage = String.Empty
+            LibraryTransferSummary = String.Empty
+
+            Try
+                Dim summary = Await transferService.ImportAsync(dialog.FileName).ConfigureAwait(True)
+                LibraryTransferSummary =
+                    $"Importacao concluida: novos {summary.NewEntries}, atualizados {summary.UpdatedEntries}, ignorados {summary.IgnoredEntries}, invalidos {summary.InvalidEntries}."
+                ScheduleLibraryReload()
+            Catch ex As InvalidDataException
+                ErrorMessage = $"Falha ao importar biblioteca: {ex.Message}"
+            Catch ex As Exception
+                ErrorMessage = $"Falha ao importar biblioteca: {ex.Message}"
+            Finally
+                IsImportingLibrary = False
+            End Try
+        End Function
 
         Private Async Function SearchAsync() As Task
             IsSearching = True

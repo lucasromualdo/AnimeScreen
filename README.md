@@ -39,6 +39,7 @@ Observacao:
   - favorito
   - notas
 - Biblioteca local com filtro por status (`Todos`), genero e ordenacao por atualizado, nota pessoal, episodio atual e titulo.
+- Portabilidade da biblioteca: exportacao em JSON/CSV e importacao JSON/CSV com merge seguro por `anime_id` e resumo final de processamento.
 - Validacoes de entrada para campos numericos.
 - Pipeline CI (build + testes) no GitHub Actions.
 
