@@ -13,7 +13,9 @@ Namespace ViewModels
     Public Class MainViewModel
         Implements INotifyPropertyChanged
 
+        Private Const SearchPageSize As Integer = 25
         Private ReadOnly _searchCommand As AsyncRelayCommand
+        Private ReadOnly _loadMoreCommand As AsyncRelayCommand
         Private ReadOnly _saveToMyListCommand As AsyncRelayCommand
         Private ReadOnly _removeFromMyListCommand As AsyncRelayCommand
         Private ReadOnly _openLibraryItemCommand As RelayCommand
@@ -25,10 +27,13 @@ Namespace ViewModels
         Private _selectedAnime As Anime
         Private _selectedLibraryItem As LibraryAnimeItem
         Private _isSearching As Boolean
+        Private _isLoadingMore As Boolean
         Private _isSavingToMyList As Boolean
         Private _isRemovingFromMyList As Boolean
         Private _isLibraryLoading As Boolean
         Private _errorMessage As String = String.Empty
+        Private _currentPage As Integer
+        Private _hasMore As Boolean
         Private _userStatus As AnimeStatus = AnimeStatus.QueroVer
         Private _currentEpisode As Integer
         Private _personalScore As Double?
@@ -40,6 +45,7 @@ Namespace ViewModels
         Private _selectionLoadVersion As Integer
         Private _libraryLoadVersion As Integer
         Private _suppressLibrarySelectionLoad As Boolean
+        Private _activeSearchTerm As String = String.Empty
 
         Public Sub New(animeApiClient As IAnimeApiClient, animeRepository As AnimeRepository, userAnimeRepository As UserAnimeRepository)
             If animeApiClient Is Nothing Then
@@ -63,6 +69,7 @@ Namespace ViewModels
             LibraryGenreOptions = New ObservableCollection(Of LibraryGenreOption)(CreateDefaultLibraryGenreOptions())
             LibrarySortOptions = CreateLibrarySortOptions()
             _searchCommand = New AsyncRelayCommand(AddressOf SearchAsync, AddressOf CanExecuteSearch)
+            _loadMoreCommand = New AsyncRelayCommand(AddressOf LoadMoreAsync, AddressOf CanExecuteLoadMore)
             _saveToMyListCommand = New AsyncRelayCommand(AddressOf SaveToMyListAsync, AddressOf CanExecuteSaveToMyList)
             _removeFromMyListCommand = New AsyncRelayCommand(AddressOf RemoveFromMyListAsync, AddressOf CanExecuteRemoveFromMyList)
             _openLibraryItemCommand = New RelayCommand(AddressOf ExecuteOpenLibraryItem, AddressOf CanExecuteOpenLibraryItem)
@@ -85,6 +92,7 @@ Namespace ViewModels
                 _query = normalizedValue
                 OnPropertyChanged()
                 _searchCommand.RaiseCanExecuteChanged()
+                _loadMoreCommand.RaiseCanExecuteChanged()
             End Set
         End Property
 
@@ -129,6 +137,21 @@ Namespace ViewModels
             End Set
         End Property
 
+        Public Property IsLoadingMore As Boolean
+            Get
+                Return _isLoadingMore
+            End Get
+            Private Set(value As Boolean)
+                If _isLoadingMore = value Then
+                    Return
+                End If
+
+                _isLoadingMore = value
+                OnPropertyChanged()
+                NotifyBusyStateChanged()
+            End Set
+        End Property
+
         Public Property IsSavingToMyList As Boolean
             Get
                 Return _isSavingToMyList
@@ -161,7 +184,7 @@ Namespace ViewModels
 
         Public ReadOnly Property IsBusy As Boolean
             Get
-                Return IsSearching OrElse IsSavingToMyList OrElse IsRemovingFromMyList
+                Return IsSearching OrElse IsLoadingMore OrElse IsSavingToMyList OrElse IsRemovingFromMyList
             End Get
         End Property
 
@@ -212,6 +235,43 @@ Namespace ViewModels
             Get
                 Return _searchCommand
             End Get
+        End Property
+
+        Public ReadOnly Property LoadMoreCommand As ICommand
+            Get
+                Return _loadMoreCommand
+            End Get
+        End Property
+
+        Public Property CurrentPage As Integer
+            Get
+                Return _currentPage
+            End Get
+            Private Set(value As Integer)
+                Dim normalizedValue = Math.Max(0, value)
+                If _currentPage = normalizedValue Then
+                    Return
+                End If
+
+                _currentPage = normalizedValue
+                OnPropertyChanged()
+                _loadMoreCommand.RaiseCanExecuteChanged()
+            End Set
+        End Property
+
+        Public Property HasMore As Boolean
+            Get
+                Return _hasMore
+            End Get
+            Private Set(value As Boolean)
+                If _hasMore = value Then
+                    Return
+                End If
+
+                _hasMore = value
+                OnPropertyChanged()
+                _loadMoreCommand.RaiseCanExecuteChanged()
+            End Set
         End Property
 
         Public Property UserStatus As AnimeStatus
@@ -386,6 +446,7 @@ Namespace ViewModels
             OnPropertyChanged(NameOf(IsBusy))
             OnPropertyChanged(NameOf(IsLoading))
             _searchCommand.RaiseCanExecuteChanged()
+            _loadMoreCommand.RaiseCanExecuteChanged()
             _saveToMyListCommand.RaiseCanExecuteChanged()
             _removeFromMyListCommand.RaiseCanExecuteChanged()
             _openLibraryItemCommand.RaiseCanExecuteChanged()
@@ -397,6 +458,22 @@ Namespace ViewModels
 
         Private Function CanExecuteSaveToMyList(parameter As Object) As Boolean
             Return (Not IsBusy) AndAlso SelectedAnime IsNot Nothing
+        End Function
+
+        Private Function CanExecuteLoadMore(parameter As Object) As Boolean
+            If IsBusy Then
+                Return False
+            End If
+
+            If CurrentPage <= 0 OrElse Not HasMore OrElse Results.Count = 0 Then
+                Return False
+            End If
+
+            If String.IsNullOrWhiteSpace(_activeSearchTerm) Then
+                Return False
+            End If
+
+            Return String.Equals(Query.Trim(), _activeSearchTerm, StringComparison.Ordinal)
         End Function
 
         Private Function CanExecuteRemoveFromMyList(parameter As Object) As Boolean
@@ -440,17 +517,20 @@ Namespace ViewModels
             Try
                 Dim apiClient = _animeApiClient
                 If apiClient Is Nothing Then
-                    Throw New InvalidOperationException("Serviço de API não inicializado.")
+                    Throw New InvalidOperationException("Servico de API nao inicializado.")
                 End If
 
                 Dim searchTerm = Query.Trim()
                 Dim animeRepository = _animeRepository
-                Dim items As IReadOnlyList(Of Anime) = Nothing
+                Dim searchResult As AnimeSearchResult = Nothing
                 Dim usedLocalFallback = False
+                _activeSearchTerm = String.Empty
+                CurrentPage = 0
+                HasMore = False
 
                 Dim apiEx As Exception = Nothing
                 Try
-                    items = Await apiClient.SearchAsync(searchTerm).ConfigureAwait(True)
+                    searchResult = Await apiClient.SearchAsync(searchTerm, page:=1, maxRows:=SearchPageSize).ConfigureAwait(True)
                 Catch ex As Exception
                     apiEx = ex
                 End Try
@@ -461,7 +541,12 @@ Namespace ViewModels
                     End If
 
                     Try
-                        items = Await animeRepository.SearchByTitleAsync(searchTerm, 25).ConfigureAwait(True)
+                        Dim localItems = Await animeRepository.SearchByTitleAsync(searchTerm, SearchPageSize).ConfigureAwait(True)
+                        searchResult = New AnimeSearchResult With {
+                            .Page = 1,
+                            .HasMore = False,
+                            .Items = localItems
+                        }
                         usedLocalFallback = True
                     Catch localEx As Exception
                         Throw New InvalidOperationException(
@@ -469,25 +554,34 @@ Namespace ViewModels
                             localEx)
                     End Try
 
-                    If items.Count > 0 Then
+                    If searchResult.Items.Count > 0 Then
                         ErrorMessage = $"Falha na busca online: {apiEx.Message}. Exibindo resultados do cache local."
                     Else
                         ErrorMessage = $"Falha na busca online: {apiEx.Message}. Nenhum resultado encontrado no cache local."
                     End If
                 End If
 
+                If searchResult Is Nothing Then
+                    searchResult = New AnimeSearchResult With {
+                        .Page = 1,
+                        .HasMore = False,
+                        .Items = Array.Empty(Of Anime)()
+                    }
+                End If
+
                 Results.Clear()
-                For Each item In items
-                    Results.Add(item)
-                Next
+                Dim appendedItems = AppendUniqueSearchResults(searchResult.Items)
+                _activeSearchTerm = searchTerm
+                CurrentPage = 1
+                HasMore = searchResult.HasMore AndAlso (Not usedLocalFallback)
 
                 If Results.Count > 0 AndAlso Not usedLocalFallback Then
                     If animeRepository Is Nothing Then
-                        ErrorMessage = "Busca concluída, mas o repositório local não está inicializado."
+                        ErrorMessage = "Busca concluida, mas o repositorio local nao esta inicializado."
                     Else
-                        Dim failedRows = Await PersistSearchResultsAsync(Results, animeRepository).ConfigureAwait(True)
+                        Dim failedRows = Await PersistSearchResultsAsync(appendedItems, animeRepository).ConfigureAwait(True)
                         If failedRows > 0 Then
-                            ErrorMessage = $"Busca concluída, mas {failedRows} resultado(s) não foram salvos localmente."
+                            ErrorMessage = $"Busca concluida, mas {failedRows} resultado(s) nao foram salvos localmente."
                         End If
                     End If
                 End If
@@ -496,9 +590,55 @@ Namespace ViewModels
             Catch ex As Exception
                 Results.Clear()
                 SelectedAnime = Nothing
+                _activeSearchTerm = String.Empty
+                CurrentPage = 0
+                HasMore = False
                 ErrorMessage = $"Falha na busca: {ex.Message}"
             Finally
                 IsSearching = False
+            End Try
+        End Function
+
+        Private Async Function LoadMoreAsync() As Task
+            Dim searchTerm = _activeSearchTerm
+            If String.IsNullOrWhiteSpace(searchTerm) Then
+                Return
+            End If
+
+            Dim nextPage = CurrentPage + 1
+            IsLoadingMore = True
+            ErrorMessage = String.Empty
+
+            Try
+                Dim apiClient = _animeApiClient
+                If apiClient Is Nothing Then
+                    Throw New InvalidOperationException("Servico de API nao inicializado.")
+                End If
+
+                Dim pageResult = Await apiClient.SearchAsync(searchTerm, page:=nextPage, maxRows:=SearchPageSize).ConfigureAwait(True)
+                If pageResult Is Nothing Then
+                    pageResult = New AnimeSearchResult With {
+                        .Page = nextPage,
+                        .HasMore = False,
+                        .Items = Array.Empty(Of Anime)()
+                    }
+                End If
+
+                Dim appendedItems = AppendUniqueSearchResults(pageResult.Items)
+                CurrentPage = nextPage
+                HasMore = pageResult.HasMore
+
+                Dim animeRepository = _animeRepository
+                If appendedItems.Count > 0 AndAlso animeRepository IsNot Nothing Then
+                    Dim failedRows = Await PersistSearchResultsAsync(appendedItems, animeRepository).ConfigureAwait(True)
+                    If failedRows > 0 Then
+                        ErrorMessage = $"Mais resultados carregados, mas {failedRows} resultado(s) nao foram salvos localmente."
+                    End If
+                End If
+            Catch ex As Exception
+                ErrorMessage = $"Falha ao carregar mais resultados (pagina {nextPage.ToString()}): {ex.Message}"
+            Finally
+                IsLoadingMore = False
             End Try
         End Function
 
@@ -684,6 +824,55 @@ Namespace ViewModels
                 LibraryGenreOptions.Add(optionItem)
             Next
         End Sub
+
+        Private Function AppendUniqueSearchResults(items As IEnumerable(Of Anime)) As IReadOnlyList(Of Anime)
+            Dim appendedItems = New List(Of Anime)
+            If items Is Nothing Then
+                Return appendedItems
+            End If
+
+            Dim knownKeys = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+            For Each existingItem In Results
+                Dim existingKey = GetSearchIdentityKey(existingItem)
+                If Not String.IsNullOrWhiteSpace(existingKey) Then
+                    knownKeys.Add(existingKey)
+                End If
+            Next
+
+            For Each item In items
+                If item Is Nothing Then
+                    Continue For
+                End If
+
+                Dim itemKey = GetSearchIdentityKey(item)
+                If String.IsNullOrWhiteSpace(itemKey) OrElse knownKeys.Add(itemKey) Then
+                    Results.Add(item)
+                    appendedItems.Add(item)
+                End If
+            Next
+
+            Return appendedItems
+        End Function
+
+        Private Shared Function GetSearchIdentityKey(item As Anime) As String
+            If item Is Nothing Then
+                Return String.Empty
+            End If
+
+            If item.MalId > 0 Then
+                Return $"mal:{item.MalId.ToString()}"
+            End If
+
+            If item.Id > 0 Then
+                Return $"id:{item.Id.ToString()}"
+            End If
+
+            If String.IsNullOrWhiteSpace(item.Title) Then
+                Return String.Empty
+            End If
+
+            Return $"title:{item.Title.Trim()}"
+        End Function
 
         Private Shared Async Function PersistSearchResultsAsync(items As IEnumerable(Of Anime), animeRepository As AnimeRepository) As Task(Of Integer)
             Dim failures = 0

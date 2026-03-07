@@ -31,17 +31,22 @@ Namespace Services.Api
             _delayAsync = If(delayAsync, defaultDelay)
         End Sub
 
-        Public Async Function SearchAsync(title As String, Optional maxRows As Integer = 25) As Task(Of IReadOnlyList(Of Anime)) Implements IAnimeApiClient.SearchAsync
+        Public Async Function SearchAsync(title As String, Optional page As Integer = 1, Optional maxRows As Integer = 25) As Task(Of AnimeSearchResult) Implements IAnimeApiClient.SearchAsync
             If String.IsNullOrWhiteSpace(title) Then
-                Return Array.Empty(Of Anime)()
+                Return New AnimeSearchResult()
             End If
 
+            Dim sanitizedPage = Math.Max(1, page)
             Dim sanitizedRows = Math.Max(1, Math.Min(maxRows, 25))
-            Dim query = $"anime?q={Uri.EscapeDataString(title.Trim())}&limit={sanitizedRows}"
+            Dim query = $"anime?q={Uri.EscapeDataString(title.Trim())}&page={sanitizedPage}&limit={sanitizedRows}"
 
             Dim payload = Await GetJsonAsync(Of JikanAnimeListResponse)(query).ConfigureAwait(False)
             If payload Is Nothing OrElse payload.Data Is Nothing Then
-                Return Array.Empty(Of Anime)()
+                Return New AnimeSearchResult With {
+                    .Page = sanitizedPage,
+                    .HasMore = False,
+                    .Items = Array.Empty(Of Anime)()
+                }
             End If
 
             Dim result = New List(Of Anime)
@@ -49,7 +54,11 @@ Namespace Services.Api
                 result.Add(MapToAnime(item))
             Next
 
-            Return result
+            Return New AnimeSearchResult With {
+                .Page = sanitizedPage,
+                .HasMore = payload.Pagination IsNot Nothing AndAlso payload.Pagination.HasNextPage,
+                .Items = result
+            }
         End Function
 
         Public Async Function GetByMalIdAsync(malId As Integer) As Task(Of Anime) Implements IAnimeApiClient.GetByMalIdAsync
@@ -270,6 +279,14 @@ Namespace Services.Api
         Private Class JikanAnimeListResponse
             <JsonPropertyName("data")>
             Public Property Data As List(Of JikanAnimeData)
+
+            <JsonPropertyName("pagination")>
+            Public Property Pagination As JikanPaginationData
+        End Class
+
+        Private Class JikanPaginationData
+            <JsonPropertyName("has_next_page")>
+            Public Property HasNextPage As Boolean
         End Class
 
         Private Class JikanAnimeSingleResponse
