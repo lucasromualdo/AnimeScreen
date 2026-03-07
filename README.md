@@ -2,14 +2,14 @@
 
 Aplicativo desktop em VB.NET (WPF) para buscar animes na Jikan API, salvar dados localmente em SQLite e gerenciar a "Minha Lista".
 
-## Status do projeto (2026-02-27)
+## Status do projeto (2026-03-07)
 
 - Milestone `v0.2.1` concluido e fechado no GitHub (bugs `#11` e `#12`).
 - Milestones anteriores concluidas: `v0.2.0`, `v0.1.1`.
-- Backlog atual (`v0.3.0`): expansoes abertas `#9`, `#10`.
+- Backlog atual (`v0.3.0`): expansoes abertas `#10`.
 - Melhoria de fluxo aberta: automacao adicional do kanban (`#15`).
-- Entrega recente: `#6` concluida (persistencia e filtro por generos na Biblioteca Local).
-- Proxima prioridade sugerida: implementar `#9` (paginacao/carregar mais resultados).
+- Entregas recentes: `#9` concluida (paginacao/carregar mais resultados), `#6` concluida (persistencia e filtro por generos na Biblioteca Local).
+- Proxima prioridade sugerida: implementar `#10`.
 
 ## Download (Windows x64)
 
