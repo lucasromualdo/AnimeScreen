@@ -11,6 +11,8 @@ artifacts/
 .vs/
 .vscode/
 .sfdx/
+.dotnet/
+.nuget/
 
 # Logs
 *.log
