@@ -152,6 +152,96 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task LoadMoreCommand_QuandoHaMaisPaginas_AnexaResultadosSemDuplicar()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var apiClient = new FakeAnimeApiClient();
+        apiClient.SearchResultsByPage[1] = new AnimeSearchResult
+        {
+            Page = 1,
+            HasMore = true,
+            Items = new List<Anime>
+            {
+                new() { MalId = 1, Title = "Naruto" },
+                new() { MalId = 2, Title = "Bleach" }
+            }
+        };
+        apiClient.SearchResultsByPage[2] = new AnimeSearchResult
+        {
+            Page = 2,
+            HasMore = false,
+            Items = new List<Anime>
+            {
+                new() { MalId = 2, Title = "Bleach" },
+                new() { MalId = 3, Title = "One Piece" }
+            }
+        };
+
+        var vm = new MainViewModel(apiClient, db.AnimeRepository, db.UserAnimeRepository)
+        {
+            Query = "Big Three"
+        };
+
+        vm.SearchCommand.Execute(null);
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Equal(1, vm.CurrentPage);
+        Assert.True(vm.HasMore);
+        Assert.Equal(2, vm.Results.Count);
+        Assert.True(vm.LoadMoreCommand.CanExecute(null));
+
+        vm.LoadMoreCommand.Execute(null);
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Equal(2, apiClient.SearchCallCount);
+        Assert.Equal(2, vm.CurrentPage);
+        Assert.False(vm.HasMore);
+        Assert.Equal(3, vm.Results.Count);
+        Assert.Equal(3, vm.Results.Select(x => x.MalId).Distinct().Count());
+
+        var persisted = await db.AnimeRepository.GetByMalIdAsync(3);
+        Assert.NotNull(persisted);
+        Assert.Equal("One Piece", persisted!.Title);
+    }
+
+    [Fact]
+    public async Task LoadMoreCommand_QuandoPaginaSeguinteFalha_MantemResultadosEInformaErro()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var apiClient = new FakeAnimeApiClient();
+        apiClient.SearchResultsByPage[1] = new AnimeSearchResult
+        {
+            Page = 1,
+            HasMore = true,
+            Items = new List<Anime>
+            {
+                new() { MalId = 16498, Title = "Shingeki no Kyojin" }
+            }
+        };
+        apiClient.SearchExceptionsByPage[2] = new HttpRequestException("Timeout na pagina.");
+
+        var vm = new MainViewModel(apiClient, db.AnimeRepository, db.UserAnimeRepository)
+        {
+            Query = "Shingeki"
+        };
+
+        vm.SearchCommand.Execute(null);
+        await WaitForBackgroundWorkAsync(vm);
+
+        var before = vm.Results.Select(x => x.MalId).ToArray();
+        Assert.True(vm.LoadMoreCommand.CanExecute(null));
+
+        vm.LoadMoreCommand.Execute(null);
+        await WaitForBackgroundWorkAsync(vm);
+
+        Assert.Equal(2, apiClient.SearchCallCount);
+        Assert.Equal(1, vm.CurrentPage);
+        Assert.True(vm.HasMore);
+        Assert.Equal(before, vm.Results.Select(x => x.MalId).ToArray());
+        Assert.Contains("pagina 2", vm.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task SaveToMyListCommand_SalvaEntradaEAtualizaBibliotecaLocal()
     {
         await using var db = await TestDatabase.CreateAsync();
@@ -524,6 +614,10 @@ public sealed class MainViewModelTests
 
         public Exception? SearchException { get; init; }
 
+        public Dictionary<int, AnimeSearchResult> SearchResultsByPage { get; } = new();
+
+        public Dictionary<int, Exception> SearchExceptionsByPage { get; } = new();
+
         public TaskCompletionSource<bool>? SearchGate { get; init; }
 
         public int SearchCallCount { get; private set; }
@@ -533,7 +627,7 @@ public sealed class MainViewModelTests
             return Task.FromResult(new Anime { MalId = malId, Title = $"Anime {malId}" });
         }
 
-        public async Task<IReadOnlyList<Anime>> SearchAsync(string title, int maxRows = 25)
+        public async Task<AnimeSearchResult> SearchAsync(string title, int page = 1, int maxRows = 25)
         {
             SearchCallCount++;
 
@@ -542,12 +636,27 @@ public sealed class MainViewModelTests
                 await SearchGate.Task;
             }
 
+            if (SearchExceptionsByPage.TryGetValue(page, out var pageException))
+            {
+                throw pageException;
+            }
+
             if (SearchException is not null)
             {
                 throw SearchException;
             }
 
-            return SearchResult;
+            if (SearchResultsByPage.TryGetValue(page, out var pageResult))
+            {
+                return pageResult;
+            }
+
+            return new AnimeSearchResult
+            {
+                Page = Math.Max(1, page),
+                HasMore = false,
+                Items = SearchResult
+            };
         }
     }
 
