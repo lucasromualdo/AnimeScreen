@@ -100,8 +100,8 @@ jobs:
           $extra = @(
             ""
             "## Download"
-            "- `MyAnimeScreen-$tag-win-x64-selfcontained.zip` (Windows x64, self-contained)"
-            "- Extraia o `.zip` e execute `MyAnimeScreen.App.exe`"
+            "- MyAnimeScreen-$tag-win-x64-selfcontained.zip (Windows x64, self-contained)"
+            "- Extraia o .zip e execute MyAnimeScreen.App.exe"
           )
 
           ($section + $extra) | Set-Content -Path $notesPath -Encoding utf8
