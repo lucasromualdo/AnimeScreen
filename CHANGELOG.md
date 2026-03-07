@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-07
+
 ### Added
 - Search pagination with "Carregar mais" flow, including Jikan page integration, ViewModel pagination state, deduplicated append by `anime_id`, and unit tests for success and next-page failure scenarios (`#9`).
 - Advanced sorting for Local Library by updated date, personal score, current episode, and title, with UI selector and test coverage (`#8`).
@@ -23,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - Local library filter now supports a `Todos` option to display all saved entries without status restriction (`#4`).
 - Search now falls back to local cache (`AnimeRepository.SearchByTitleAsync`) when the Jikan API is unavailable, with user-facing context messaging (`#7`).
 - Test coverage for library filter `Todos` behavior and offline search fallback paths.
+
 ## [0.1.1] - 2026-02-19
 
 ### Changed
