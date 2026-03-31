@@ -65,6 +65,24 @@ dotnet run --project src/MyAnimeScreen.App/MyAnimeScreen.App.vbproj
 dotnet test MyAnimeScreen.slnx
 ```
 
+## Limpeza rapida do workspace
+
+```powershell
+.\scripts\clean.ps1
+```
+
+Se o PowerShell bloquear execucao de scripts no ambiente local:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\clean.ps1
+```
+
+Opcional: incluir cache local de pacotes NuGet do repositorio (`.nuget`):
+
+```powershell
+.\scripts\clean.ps1 -IncludeNugetCache
+```
+
 ## Como gerar build de release (framework-dependent)
 
 ```powershell
