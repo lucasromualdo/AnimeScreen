@@ -1,5 +1,6 @@
 Imports System.Collections.Generic
 Imports System.Data
+Imports System.Diagnostics
 Imports System.Linq
 Imports Dapper
 Imports MyAnimeScreen.App.Models
@@ -58,8 +59,15 @@ RETURNING id;"
                         Await ReplaceGenresForAnimeAsync(connection, transaction, animeId, anime.Genres).ConfigureAwait(False)
                         transaction.Commit()
                         Return animeId
-                    Catch
-                        transaction.Rollback()
+                    Catch ex As Exception
+                        Try
+                            transaction.Rollback()
+                        Catch rollbackEx As Exception
+                            Trace.TraceError($"AnimeRepository.UpsertAsync rollback failed for MalId={anime.MalId}: {rollbackEx}")
+                            Throw
+                        End Try
+
+                        Trace.TraceError($"AnimeRepository.UpsertAsync failed for MalId={anime.MalId}: {ex}")
                         Throw
                     End Try
                 End Using

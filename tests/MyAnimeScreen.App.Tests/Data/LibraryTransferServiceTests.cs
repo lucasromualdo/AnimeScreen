@@ -193,6 +193,129 @@ public sealed class LibraryTransferServiceTests
         Assert.Equal(0, secondImport.InvalidEntries);
     }
 
+    [Fact]
+    public async Task ImportAsync_WhenPersistenceFailsAfterMetadataMerge_RollsBackRowCompletely()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var successfulAnimeId = await database.SeedAnimeAsync(70401, "Monster");
+        const long failingAnimeId = 99031;
+
+        await database.CreateUserAnimeInsertFailureTriggerAsync(failingAnimeId);
+
+        var importPath = Path.Combine(database.RootPath, "rollback_import.json");
+        var payload = BuildJsonPayload(new[]
+        {
+            BuildEntry(
+                animeId: successfulAnimeId,
+                animeMalId: 70401,
+                title: "Monster",
+                status: "Assistindo",
+                currentEpisode: 10,
+                personalScore: 9.1,
+                notes: "ok",
+                isFavorite: false,
+                genres: new[] { "Mystery" }),
+            BuildEntry(
+                animeId: failingAnimeId,
+                animeMalId: 90401,
+                title: "Rollback Candidate",
+                status: "Assistindo",
+                currentEpisode: 1,
+                personalScore: 7.8,
+                notes: null,
+                isFavorite: false,
+                genres: new[] { "RollbackOnlyGenre" })
+        });
+
+        await File.WriteAllTextAsync(importPath, payload, Encoding.UTF8);
+
+        var summary = await database.LibraryTransferService.ImportAsync(importPath);
+
+        Assert.Equal(1, summary.NewEntries);
+        Assert.Equal(0, summary.UpdatedEntries);
+        Assert.Equal(0, summary.IgnoredEntries);
+        Assert.Equal(1, summary.InvalidEntries);
+
+        Assert.True(await database.UserAnimeExistsAsync(successfulAnimeId));
+        Assert.True(await database.GenreExistsAsync("Mystery"));
+
+        Assert.False(await database.AnimeExistsAsync(failingAnimeId));
+        Assert.False(await database.UserAnimeExistsAsync(failingAnimeId));
+        Assert.False(await database.GenreExistsAsync("RollbackOnlyGenre"));
+    }
+
+    [Fact]
+    public async Task ImportAsync_WhenExecutedConcurrently_PersistsBothImportsWithoutCorruption()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        const long firstAnimeId = 99101;
+        const long secondAnimeId = 99102;
+
+        var firstPath = Path.Combine(database.RootPath, "parallel_1.json");
+        var secondPath = Path.Combine(database.RootPath, "parallel_2.json");
+
+        var firstPayload = BuildJsonPayload(new[]
+        {
+            BuildEntry(
+                animeId: firstAnimeId,
+                animeMalId: 90501,
+                title: "Parallel One",
+                status: "Assistindo",
+                currentEpisode: 4,
+                personalScore: 8.0,
+                notes: null,
+                isFavorite: false)
+        });
+
+        var secondPayload = BuildJsonPayload(new[]
+        {
+            BuildEntry(
+                animeId: secondAnimeId,
+                animeMalId: 90502,
+                title: "Parallel Two",
+                status: "QueroVer",
+                currentEpisode: 0,
+                personalScore: null,
+                notes: null,
+                isFavorite: true)
+        });
+
+        await File.WriteAllTextAsync(firstPath, firstPayload, Encoding.UTF8);
+        await File.WriteAllTextAsync(secondPath, secondPayload, Encoding.UTF8);
+
+        var secondService = new LibraryTransferService(database.ConnectionFactory);
+        var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var firstTask = Task.Run(async () =>
+        {
+            await gate.Task;
+            return await database.LibraryTransferService.ImportAsync(firstPath);
+        });
+
+        var secondTask = Task.Run(async () =>
+        {
+            await gate.Task;
+            return await secondService.ImportAsync(secondPath);
+        });
+
+        gate.SetResult(true);
+
+        var summaries = await Task.WhenAll(firstTask, secondTask);
+
+        Assert.All(summaries, summary =>
+        {
+            Assert.Equal(1, summary.NewEntries);
+            Assert.Equal(0, summary.UpdatedEntries);
+            Assert.Equal(0, summary.IgnoredEntries);
+            Assert.Equal(0, summary.InvalidEntries);
+        });
+
+        Assert.True(await database.AnimeExistsAsync(firstAnimeId));
+        Assert.True(await database.AnimeExistsAsync(secondAnimeId));
+        Assert.True(await database.UserAnimeExistsAsync(firstAnimeId));
+        Assert.True(await database.UserAnimeExistsAsync(secondAnimeId));
+    }
+
     private static Dictionary<string, object?> BuildEntry(
         long animeId,
         int animeMalId,
@@ -201,7 +324,8 @@ public sealed class LibraryTransferServiceTests
         int currentEpisode,
         double? personalScore,
         string? notes,
-        bool isFavorite)
+        bool isFavorite,
+        IReadOnlyList<string>? genres = null)
     {
         return new Dictionary<string, object?>
         {
@@ -215,7 +339,7 @@ public sealed class LibraryTransferServiceTests
             ["score"] = null,
             ["year"] = null,
             ["season"] = null,
-            ["genres"] = Array.Empty<string>(),
+            ["genres"] = genres ?? Array.Empty<string>(),
             ["user_status"] = status,
             ["current_episode"] = currentEpisode,
             ["personal_score"] = personalScore,
@@ -297,6 +421,66 @@ public sealed class LibraryTransferServiceTests
                 MalId = malId,
                 Title = title
             });
+        }
+
+        public async Task CreateUserAnimeInsertFailureTriggerAsync(long animeId)
+        {
+            await using var connection = await ConnectionFactory.CreateOpenConnectionAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                $@"CREATE TRIGGER IF NOT EXISTS trg_fail_user_anime_{animeId.ToString(CultureInfo.InvariantCulture)}
+                   BEFORE INSERT ON user_anime
+                   WHEN NEW.anime_id = {animeId.ToString(CultureInfo.InvariantCulture)}
+                   BEGIN
+                       SELECT RAISE(ABORT, 'forced rollback test failure');
+                   END;";
+
+            await command.ExecuteNonQueryAsync();
+        }
+
+        public async Task<bool> AnimeExistsAsync(long animeId)
+        {
+            await using var connection = await ConnectionFactory.CreateOpenConnectionAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT EXISTS(SELECT 1 FROM animes WHERE id = @AnimeId);";
+
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@AnimeId";
+            parameter.Value = animeId;
+            command.Parameters.Add(parameter);
+
+            var scalar = await command.ExecuteScalarAsync();
+            return Convert.ToInt32(scalar, CultureInfo.InvariantCulture) == 1;
+        }
+
+        public async Task<bool> UserAnimeExistsAsync(long animeId)
+        {
+            await using var connection = await ConnectionFactory.CreateOpenConnectionAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT EXISTS(SELECT 1 FROM user_anime WHERE anime_id = @AnimeId);";
+
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@AnimeId";
+            parameter.Value = animeId;
+            command.Parameters.Add(parameter);
+
+            var scalar = await command.ExecuteScalarAsync();
+            return Convert.ToInt32(scalar, CultureInfo.InvariantCulture) == 1;
+        }
+
+        public async Task<bool> GenreExistsAsync(string genreName)
+        {
+            await using var connection = await ConnectionFactory.CreateOpenConnectionAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT EXISTS(SELECT 1 FROM genres WHERE name = @GenreName);";
+
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@GenreName";
+            parameter.Value = genreName;
+            command.Parameters.Add(parameter);
+
+            var scalar = await command.ExecuteScalarAsync();
+            return Convert.ToInt32(scalar, CultureInfo.InvariantCulture) == 1;
         }
 
         public ValueTask DisposeAsync()

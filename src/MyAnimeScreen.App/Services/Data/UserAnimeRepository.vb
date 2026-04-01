@@ -1,4 +1,6 @@
+Imports System.Diagnostics
 Imports Dapper
+Imports Microsoft.Data.Sqlite
 Imports MyAnimeScreen.App.Models
 
 Namespace Services.Data
@@ -57,7 +59,14 @@ RETURNING id;"
             }
 
             Using connection = Await _connectionFactory.CreateOpenConnectionAsync().ConfigureAwait(False)
-                Return Await connection.ExecuteScalarAsync(Of Long)(sql, parameters).ConfigureAwait(False)
+                Try
+                    Return Await connection.ExecuteScalarAsync(Of Long)(sql, parameters).ConfigureAwait(False)
+                Catch ex As SqliteException
+                    Trace.TraceError(
+                        $"UserAnimeRepository.UpsertAsync persistence failure for AnimeId={entry.AnimeId}. " &
+                        $"SqliteErrorCode={ex.SqliteErrorCode}, SqliteExtendedErrorCode={ex.SqliteExtendedErrorCode}, Message='{ex.Message}'.")
+                    Throw
+                End Try
             End Using
         End Function
 
@@ -227,10 +236,17 @@ ORDER BY g.name COLLATE NOCASE;"
 WHERE anime_id = @AnimeId;"
 
             Using connection = Await _connectionFactory.CreateOpenConnectionAsync().ConfigureAwait(False)
-                Return Await connection.ExecuteAsync(
-                    sql,
-                    New With {.AnimeId = animeId}
-                ).ConfigureAwait(False)
+                Try
+                    Return Await connection.ExecuteAsync(
+                        sql,
+                        New With {.AnimeId = animeId}
+                    ).ConfigureAwait(False)
+                Catch ex As SqliteException
+                    Trace.TraceError(
+                        $"UserAnimeRepository.DeleteByAnimeIdAsync persistence failure for AnimeId={animeId}. " &
+                        $"SqliteErrorCode={ex.SqliteErrorCode}, SqliteExtendedErrorCode={ex.SqliteExtendedErrorCode}, Message='{ex.Message}'.")
+                    Throw
+                End Try
             End Using
         End Function
 

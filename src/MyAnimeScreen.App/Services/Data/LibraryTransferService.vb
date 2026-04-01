@@ -1,6 +1,7 @@
 Imports System.Globalization
 Imports System.IO
 Imports System.Linq
+Imports System.Diagnostics
 Imports System.Text
 Imports System.Text.Json
 Imports System.Text.Json.Serialization
@@ -12,6 +13,8 @@ Imports MyAnimeScreen.App.Models
 Namespace Services.Data
     Public Class LibraryTransferService
         Private Const CsvGenreSeparator As Char = "|"c
+        Private Const MaxImportRetryAttempts As Integer = 3
+        Private Const ImportRetryDelayMs As Integer = 120
         Private Shared ReadOnly CsvHeaderColumns As IReadOnlyList(Of String) = New List(Of String) From {
             "anime_id",
             "anime_mal_id",
@@ -108,48 +111,185 @@ Namespace Services.Data
             ValidateInputFilePath(filePath)
 
             Dim parsed = Await ReadImportBatchAsync(filePath).ConfigureAwait(False)
+            If parsed.Records.Count = 0 Then
+                Return New LibraryImportSummary With {
+                    .InvalidEntries = parsed.InvalidRows
+                }
+            End If
+
+            Dim lastLockException As SqliteException = Nothing
+
+            For attempt = 1 To MaxImportRetryAttempts
+                Dim lockException As SqliteException = Nothing
+                Try
+                    Return Await ImportBatchAsync(filePath, parsed).ConfigureAwait(False)
+                Catch ex As SqliteException When IsTransientLockError(ex)
+                    lockException = ex
+                End Try
+
+                If lockException Is Nothing Then
+                    Continue For
+                End If
+
+                lastLockException = lockException
+                Trace.TraceWarning(
+                    $"Library import lock detected (attempt {attempt}/{MaxImportRetryAttempts}) for '{filePath}'. " &
+                    $"SqliteErrorCode={lockException.SqliteErrorCode}, SqliteExtendedErrorCode={lockException.SqliteExtendedErrorCode}.")
+                If attempt = MaxImportRetryAttempts Then
+                    Exit For
+                End If
+
+                Dim delayMs = ImportRetryDelayMs * attempt
+                Await Task.Delay(TimeSpan.FromMilliseconds(delayMs)).ConfigureAwait(False)
+            Next
+
+            Throw New InvalidOperationException(
+                $"Falha ao importar biblioteca por concorrencia de escrita apos {MaxImportRetryAttempts} tentativa(s).",
+                lastLockException)
+        End Function
+
+        Private Async Function ImportBatchAsync(filePath As String, parsed As ParsedImportBatch) As Task(Of LibraryImportSummary)
             Dim summary = New LibraryImportSummary With {
                 .InvalidEntries = parsed.InvalidRows
             }
 
-            If parsed.Records.Count = 0 Then
-                Return summary
-            End If
-
             Using connection = Await _connectionFactory.CreateOpenConnectionAsync().ConfigureAwait(False)
                 Using transaction = connection.BeginTransaction()
                     Try
+                        Dim rowIndex = 0
                         For Each record In parsed.Records
+                            rowIndex += 1
+
                             Dim normalized As NormalizedLibraryTransferRecord = Nothing
                             If Not TryNormalizeRecord(record, normalized) Then
                                 summary.InvalidEntries += 1
+                                Trace.TraceWarning(
+                                    $"Library import ignored invalid row {rowIndex} from '{filePath}'. " &
+                                    $"AnimeId={If(record Is Nothing, 0, record.AnimeId)}, AnimeMalId={If(record Is Nothing, 0, record.AnimeMalId)}.")
                                 Continue For
                             End If
 
+                            Dim savepointName = BuildSavepointName(rowIndex)
+                            Await ExecuteSavepointCommandAsync(connection, transaction, $"SAVEPOINT {savepointName};").ConfigureAwait(False)
+
+                            Dim mergeOutcome As MergeOutcome
+                            Dim mergeFailure As SqliteException = Nothing
                             Try
-                                Dim mergeOutcome = Await MergeRecordAsync(connection, transaction, normalized).ConfigureAwait(False)
-                                Select Case mergeOutcome
-                                    Case MergeOutcome.Added
-                                        summary.NewEntries += 1
-                                    Case MergeOutcome.Updated
-                                        summary.UpdatedEntries += 1
-                                    Case Else
-                                        summary.IgnoredEntries += 1
-                                End Select
+                                mergeOutcome = Await MergeRecordAsync(connection, transaction, normalized).ConfigureAwait(False)
+                                Await ExecuteSavepointCommandAsync(connection, transaction, $"RELEASE SAVEPOINT {savepointName};").ConfigureAwait(False)
                             Catch ex As SqliteException
-                                summary.InvalidEntries += 1
+                                mergeFailure = ex
                             End Try
+
+                            If mergeFailure IsNot Nothing Then
+                                Await RollbackSavepointAsync(connection, transaction, savepointName).ConfigureAwait(False)
+                                summary.InvalidEntries += 1
+                                Trace.TraceError(
+                                    $"Library import rollback for row {rowIndex} in '{filePath}'. " &
+                                    $"AnimeId={normalized.AnimeId}, AnimeMalId={normalized.AnimeMalId}, " &
+                                    $"SqliteErrorCode={mergeFailure.SqliteErrorCode}, SqliteExtendedErrorCode={mergeFailure.SqliteExtendedErrorCode}, " &
+                                    $"Message='{mergeFailure.Message}'.")
+                                Continue For
+                            End If
+
+                            Select Case mergeOutcome
+                                Case MergeOutcome.Added
+                                    summary.NewEntries += 1
+                                Case MergeOutcome.Updated
+                                    summary.UpdatedEntries += 1
+                                Case Else
+                                    summary.IgnoredEntries += 1
+                            End Select
                         Next
 
                         transaction.Commit()
-                    Catch
-                        transaction.Rollback()
+                    Catch ex As Exception
+                        RollbackImportTransaction(transaction, filePath, ex)
                         Throw
                     End Try
                 End Using
             End Using
 
             Return summary
+        End Function
+
+        Private Shared Async Function RollbackSavepointAsync(
+            connection As SqliteConnection,
+            transaction As SqliteTransaction,
+            savepointName As String
+        ) As Task
+            Dim rollbackException As Exception = Nothing
+            Try
+                Await ExecuteSavepointCommandAsync(connection, transaction, $"ROLLBACK TO SAVEPOINT {savepointName};").ConfigureAwait(False)
+            Catch ex As Exception
+                rollbackException = ex
+            End Try
+
+            Dim releaseException As Exception = Nothing
+            Try
+                Await ExecuteSavepointCommandAsync(connection, transaction, $"RELEASE SAVEPOINT {savepointName};").ConfigureAwait(False)
+            Catch ex As Exception
+                releaseException = ex
+            End Try
+
+            If rollbackException IsNot Nothing AndAlso releaseException IsNot Nothing Then
+                Throw New AggregateException(
+                    $"Falha ao rollback e liberar savepoint '{savepointName}'.",
+                    rollbackException,
+                    releaseException)
+            End If
+
+            If rollbackException IsNot Nothing Then
+                Throw rollbackException
+            End If
+
+            If releaseException IsNot Nothing Then
+                Throw releaseException
+            End If
+        End Function
+
+        Private Shared Sub RollbackImportTransaction(
+            transaction As SqliteTransaction,
+            filePath As String,
+            sourceException As Exception
+        )
+            If transaction Is Nothing Then
+                Return
+            End If
+
+            Try
+                transaction.Rollback()
+                Trace.TraceError($"Library import transaction rolled back for '{filePath}'. Cause: {sourceException}")
+            Catch rollbackEx As Exception
+                Trace.TraceError(
+                    $"Library import rollback failed for '{filePath}'. " &
+                    $"Cause: {sourceException}. Rollback exception: {rollbackEx}")
+                Throw
+            End Try
+        End Sub
+
+        Private Shared Async Function ExecuteSavepointCommandAsync(
+            connection As SqliteConnection,
+            transaction As SqliteTransaction,
+            commandText As String
+        ) As Task
+            Using command = connection.CreateCommand()
+                command.Transaction = transaction
+                command.CommandText = commandText
+                Await command.ExecuteNonQueryAsync().ConfigureAwait(False)
+            End Using
+        End Function
+
+        Private Shared Function BuildSavepointName(rowIndex As Integer) As String
+            Return $"import_row_{rowIndex.ToString(CultureInfo.InvariantCulture)}"
+        End Function
+
+        Private Shared Function IsTransientLockError(ex As SqliteException) As Boolean
+            If ex Is Nothing Then
+                Return False
+            End If
+
+            Return ex.SqliteErrorCode = 5 OrElse ex.SqliteErrorCode = 6
         End Function
 
         Private Async Function ListLibraryTransferRecordsAsync() As Task(Of IReadOnlyList(Of LibraryTransferRecord))
